@@ -78,4 +78,16 @@ if (!is.null(rf_c) && !is.null(rf_t)) {
 rm(rf_c, rf_t); gc()
 
 saveRDS(data.frame(sc = sc, rep = rep, orig_auc = auc_(po, l), strat_auc = auc_(ps, l), vt_auc = auc_(vt, l)), outfile)
+
+# Also save raw predictions for downstream analysis
+raw_dir <- "results_raw"
+dir.create(raw_dir, showWarnings = FALSE, recursive = TRUE)
+raw_file <- file.path(raw_dir, paste0("Sc", sc, "_Rep", rep, "_raw.rds"))
+saveRDS(list(scenario = sc, rep = rep,
+             label = l,
+             orig_pred = po,
+             strat_pred = ps,
+             vt_pred = vt),
+        raw_file)
+
 cat(sprintf("rep %d done\n", rep))

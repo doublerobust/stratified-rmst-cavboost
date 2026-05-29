@@ -46,3 +46,4 @@ clean.log
 # Temp
 tmp/
 .Rproj.user/
+results_raw/
