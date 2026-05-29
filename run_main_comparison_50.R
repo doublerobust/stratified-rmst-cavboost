@@ -93,19 +93,21 @@ for (sc in c(1, 2, 3, 4, 5, 6)) {
   }
   cat("\n")
   all <- rbind(all, res)
-  saveRDS(all, "main_comparison_50rep.rds")
+  saveRDS(res, sprintf("checkpoint_sc%d.rds", sc))  # per-scenario checkpoint
 }
 
 cat("\n============================================================\n")
 cat("  MAIN COMPARISON (50 reps, cross-fitted)\n")
 cat("============================================================\n\n")
-for (sc_name in c("S1_Linear", "S2_Diff", "S3_U", "S4_Enclave", "S5_S", "S6_Cross")) {
-  s <- all[all$sc == sc_name, ]
-  cat(sprintf("--- %s (n=%d) ---\n", sc_name, nrow(s)))
+for (sc_id in 1:6) {
+  s <- all[all$sc == sc_id, ]
+  sn <- sc_names[[as.character(sc_id)]]
+  cat(sprintf("--- %s (n=%d) ---\n", sn, nrow(s)))
   cat(sprintf("%-10s %8s\n", "Method", "AUC"))
   for (mn in list(c("orig", "Original"), c("strat", "Strat_CF"), c("vt", "VT"))) {
-    cat(sprintf("%-10s %8.4f\n", mn[[2]], mean(s[[paste0(mn[[1]], "_auc")]], na.rm = TRUE)))
+    v <- mean(s[[paste0(mn[[1]], "_auc")]], na.rm = TRUE)
+    cat(sprintf("%-10s %8.4f\n", mn[[2]], if(is.finite(v)) v else NaN))
   }
   cat("\n")
 }
-cat("Saved to main_comparison_50rep.rds\n")
+cat("Checkpoints saved to checkpoint_sc*.rds\n")
