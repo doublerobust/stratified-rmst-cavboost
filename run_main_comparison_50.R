@@ -21,11 +21,13 @@ run_one <- function(sc, rep) {
   Zb <- X[, 1:4, drop = FALSE] %*% c(0.4, 0.4, 0.4, 0.4)
   te <- switch(sc,
     `1` = X[, "S1"],
+    `2` = X[, "S1"] - X[, "S2"],
     `3` = { s <- X[, "S1"]; 2 * ifelse(abs(s) < 0.67, exp(-s^2) - 0.4, exp(-s^2) - 0.8) },
     `4` = { s1 <- X[, "S1"]; 2 * ((-1.07 <= s1 & s1 < 1.07) & (-1.07 <= X[, "S2"] & X[, "S2"] < 1.07)) - 1 },
-    `5` = { s <- X[, "S1"]; 2 * ifelse(s >= 0.67 | (-0.67 <= s & s < 0), 1, 0) - 1 }
+    `5` = { s <- X[, "S1"]; 2 * ifelse(s >= 0.67 | (-0.67 <= s & s < 0), 1, 0) - 1 },
+    `6` = { s1 <- X[, "S1"]; s2 <- X[, "S2"]; 2 * ifelse((s1 >= 0 & s2 >= -0.67) | (s1 < 0 & s2 < -0.67), 1, 0) - 1 }
   )
-  if (sc %in% 4:5) Zb <- -Zb^2
+  if (sc %in% 4:6) Zb <- -Zb^2
   T <- exp(b0 + A * te + Zb + s0 * rnorm(n_tr + n_te))
   C <- pmin(30, rexp(n_tr + n_te, rate = -log(0.9) / 12))
   U <- pmin(T, C, tau); st <- as.numeric(T <= C)
@@ -63,11 +65,11 @@ run_one <- function(sc, rep) {
 }
 
 # Run
-sc_names <- list("1" = "S1_Linear", "3" = "S3_U", "4" = "S4_Enclave", "5" = "S5_S")
+sc_names <- list("1" = "S1_Linear", "2" = "S2_Diff", "3" = "S3_U", "4" = "S4_Enclave", "5" = "S5_S", "6" = "S6_Cross")
 all <- data.frame()
 n_sim <- 50
 
-for (sc in c(1, 3, 4, 5)) {
+for (sc in c(1, 2, 3, 4, 5, 6)) {
   res <- data.frame()
   for (rep in 1:n_sim) {
     r <- tryCatch(run_one(sc, rep), error = function(e) NULL)
@@ -82,7 +84,7 @@ for (sc in c(1, 3, 4, 5)) {
 cat("\n============================================================\n")
 cat("  MAIN COMPARISON (50 reps, cross-fitted)\n")
 cat("============================================================\n\n")
-for (sc_name in c("S1_Linear", "S3_U", "S4_Enclave", "S5_S")) {
+for (sc_name in c("S1_Linear", "S2_Diff", "S3_U", "S4_Enclave", "S5_S", "S6_Cross")) {
   s <- all[all$sc == sc_name, ]
   cat(sprintf("--- %s (n=%d) ---\n", sc_name, nrow(s)))
   cat(sprintf("%-10s %8s\n", "Method", "AUC"))
