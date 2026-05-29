@@ -29,3 +29,20 @@
 # OS
 .DS_Store
 Thumbs.db
+results_final/
+tmp_results/
+checkpoint_sc*.rds
+main_comparison_50rep.rds
+main_50rep.log
+run50*.log
+*.rds
+
+# Results CSV (generated)
+results_csv/
+
+# Clean runner log
+clean.log
+
+# Temp
+tmp/
+.Rproj.user/

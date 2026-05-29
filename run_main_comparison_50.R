@@ -4,7 +4,7 @@
 
 library(pROC); library(mvtnorm)
 source("R/stratified_cavboost.R")
-source("~/.openclaw/workspace/CAVBoost/rmst_cavboost_clean.R")
+source("R/rmst_cavboost_clean.R")
 
 Sys.setenv(R_DEFAULT_INTERNET_TIMEOUT = "600")
 
@@ -45,8 +45,10 @@ run_one <- function(sc, rep) {
   po <- if (!is.null(fo)) pred_subgroup(fo, te_df) else rep(0.5, nrow(te_df))
   rm(fo)
   
-  # Cross-fitted stratified (6 prognostic vars)
-  feat_all <- colnames(X)  # all 52 covariates
+  # Cross-fitted stratified (ALL 52 covariates — using fewer silently changes the
+  # prognostic score and invalidates the comparison. Do NOT subset.)
+  feat_all <- colnames(X)
+  stopifnot("Prognostic score must use all 52 covariates" = length(feat_all) == 52)
   st_ <- tryCatch(crossfit_prognostic_strata(tr, feat_all, nfold = 5, K = 4, seed = rep * 100 + sc), error = function(e) NULL)
   fs <- if (!is.null(st_)) tryCatch(train_stratified_cavboost(tr, tr$time, tr$status, tau, stratum = st_, eta = 0.1, max_depth = 2, nr = nr), error = function(e) NULL) else NULL
   ps <- if (!is.null(fs)) pred_stratified(fs, te_df) else rep(0.5, nrow(te_df))

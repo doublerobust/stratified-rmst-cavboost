@@ -5,6 +5,11 @@ time-to-event outcomes.  Augments the original CAVBoost gradient by
 computing the value function within prognostic strata, blocking
 prognostic confounding and improving subgroup identification accuracy.
 
+The prognostic score is estimated via **5-fold cross-fitted elastic net
+Cox** (`cv.glmnet`, `alpha=0.5`) using **all 52 covariates**.  No
+collapsing or variable subsetting — experience shows that using fewer
+covariates silently changes the score and produces misleading comparisons.
+
 ## Key Formula
 
 Value function:
@@ -18,38 +23,65 @@ $$g_j = -p_j(1-p_j)\Big[d_k^{(1)} + d_k^{(2)} + W_k\frac{\partial d_k^{(1)}}{\pa
 ## Repository Structure
 
 ```
-├── R/                          # Implementation
-│   ├── stratified_cavboost.R   # Main gradient implementation
-│   └── test_stratified_gradient.R  # Gradient verification
-├── sim/                        # Simulation scripts
-│   ├── run_holdout.R           # Primary DGP comparison
-│   ├── run_vt.R                # Virtual twin comparison
-│   ├── run_sb_prog.R           # SubgroupBoost-style DGP
-│   ├── run_zhang.R             # Zhang complex boundary scenarios
-│   └── compare_prog_scores.R   # Prognostic score method comparison
-├── methodology/                # Writeup
-│   ├── stratified-rmst-boosting.pdf
-│   └── stratified-rmst-boosting.tex
+├── R/
+│   ├── stratified_cavboost.R      # Main gradient + crossfit implementation
+│   ├── rmst_cavboost_clean.R      # Original CAVBoost (baseline comparator)
+│   └── test_stratified_gradient.R # Gradient verification
+├── methodology/
+│   ├── stratified-rmst-boosting.tex  # Manuscript source
+│   └── stratified-rmst-boosting.pdf  # Rendered manuscript
+├── specs/
+│   └── foundation-moe-subgroup.md    # Future work: Foundation MoE spec
+├── run_main_comparison_50.R       # In-process 50-rep runner (Orig vs Strat vs VT)
+├── run_clean_50.R                 # Clean sequential runner (CSV output, gc() between reps)
+├── run_one_rep_v2.R               # Single-rep runner (fresh R process)
+├── run_sequential.R               # Subprocess sequential runner (calls v2)
+├── DEPENDENCIES.md                # Onboarding & installation guide
 └── README.md
 ```
 
-## Key Results (hold-out AUC)
+## Running the Simulation
 
-| Scenario | Original | Stratified | VT | Gain |
-|----------|:--------:|:----------:|:--:|:----:|
-| *Primary DGP* | 0.602 | **0.635** | 0.705 | +3.3 pts |
-| *Pure predictive* | 0.620 | **0.656** | 0.706 | +3.6 pts |
-| *SubgroupBoost DGP* | 0.679 | **0.740** | 0.762 | +6.1 pts |
-| S1: Linear | 0.798 | **0.964** | 0.956 | +16.6 pts |
-| S3: U-shaped | 0.918 | **0.977** | 0.509 | +5.9 pts |
-| S4: Enclave | 0.844 | 0.765 | 0.506 | -7.9 pts |
-| S5: S-shaped | 0.918 | 0.849 | 0.596 | -6.9 pts |
+### Single rep (testing):
+```bash
+Rscript run_one_rep_v2.R <scenario 1-6> <rep 1-50> <output_path>
+```
+
+### Full 50-rep × 6-scenario (sequential, about 3h):
+```bash
+Rscript run_clean_50.R > clean.log 2>&1 &
+```
+
+### Full run via subprocess:
+```bash
+Rscript run_sequential.R
+```
+
+### Parallel (on a multi-core machine):
+```bash
+parallel -j 8 Rscript run_one_rep_v2.R {1} {2} results/sc{1}_rep{2}.rds ::: \
+  1 2 3 4 5 6 ::: $(seq 1 50)
+```
+
+### In-process (memory-intensive, faster):
+```bash
+Rscript run_main_comparison_50.R
+```
+
+## Key Parameter Agreements
+
+| Parameter | Value |
+|-----------|-------|
+| Prognostic strata | 5-fold cross-fitted `cv.glmnet(family="cox", alpha=0.5)`, all 52 covariates |
+| Original CAVBoost | `eta=0.05, max_depth=3, nrounds=50` |
+| Stratified CAVBoost | `eta=0.1, max_depth=2, nrounds=50` |
+| Virtual Twin | `ranger(num.trees=200, min.node.size=10)`, per-arm RF, RMST via trapezoidal integration on τ=30 |
+| Zhang scenarios | `n_train=500, n_test=2000, τ=30, ρ=1/3`, Setting 2 prognostic strength |
 
 ## Dependencies
 
-- R 4.6+ with: survival, xgboost, mvtnorm, pROC, pseudo
-- For the original CAVBoost reference: `rmst_cavboost_clean.R` from
-  the [CAVBoost](https://github.com/sambiostat/CAVBoost) repository.
+- R 4.2+ with: xgboost, glmnet, ranger, survival, mvtnorm, pROC
+- See `DEPENDENCIES.md` for full installation instructions.
 
 ## Reference
 
