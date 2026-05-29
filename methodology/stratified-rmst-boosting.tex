@@ -390,29 +390,31 @@ The stratification gain is largest here: AUC +6.1 points and FPR -5.3
 points.  The gap to virtual twin shrinks from 8.3 points (original) to
 2.2 points.
 
-\subsection{Complex Boundary Scenarios}
+\subsection{Complex Boundary Scenarios (Zhang et al. 2020)}
 
 \label{sec:complex}
 
-The \textit{Zhang et al. (2020)} paper defines four additional scenarios
-with increasing boundary complexity, using 52 covariates (50 noise, 2
+The Zhang et al. (2020) SubgroupBoost paper defines four scenarios with
+increasing boundary complexity, using 52 covariates (50 noise, 2
 predictive $S_1, S_2$), $N_{\text{train}} = 500$, $N_{\text{test}} = 2000$,
-and 4 prognostic covariates with effect $\beta_Z = 0.4$ (Setting~2).
-In these scenarios the treatment effect surface is nonlinear, which
-exposes the limitations of the linear Cox PH model used by virtual
-twin.
+$\tau = 30$, and Setting~2 prognostic strength
+($\beta_{Z_{1:4}} = 0.4$).  The prognostic score is estimated via
+5-fold cross-fitted Cox PH, so the within-stratum gradient computation
+uses out-of-fold predictions and avoids training-set overlap.
+
+Results from 30 Monte Carlo reps:
 
 \begin{center}
 \begin{tabular}{lcccc}
 \toprule
- & \multicolumn{4}{c}{Hold-out AUC} \\
-\cmidrule{2-5}
-Scenario (boundary) & Original & \textbf{Stratified} & VT & Gain \\
+ & \multicolumn{3}{c}{Hold-out AUC} & Gain \\
+\cmidrule{2-4}
+Scenario (boundary) & Original & \textbf{Stratified} & VT & (Orig $\to$ Strat) \\
 \midrule
-S1: Linear ($S_1 = 0$) & 0.798 & \textbf{0.964} & 0.956 & $+$0.166\\
-S3: U-shaped ($S_1$) & 0.918 & \textbf{0.977} & 0.509 & $+$0.059\\
-S4: Enclave ($S_1 \times S_2$) & 0.844 & 0.765 & 0.506 & $-$0.079\\
-S5: S-shaped ($S_1$, disjoint) & 0.918 & 0.849 & 0.596 & $-$0.069\\
+S1: Linear ($S_1 = 0$) & 0.757 & \textbf{0.880} & 0.956 & $+$0.123\\
+S3: U-shaped ($S_1$) & 0.844 & \textbf{0.932} & 0.509 & $+$0.088\\
+S4: Enclave ($S_1 \times S_2$) & \textbf{0.778} & 0.764 & 0.508 & $-$0.014\\
+S5: S-shaped ($S_1$, disjoint) & 0.805 & \textbf{0.883} & 0.595 & $+$0.078\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -420,25 +422,40 @@ S5: S-shaped ($S_1$, disjoint) & 0.918 & 0.849 & 0.596 & $-$0.069\\
 The key findings are:
 \begin{itemize}
   \item \textbf{Virtual twin collapses on nonlinear boundaries} (S3: 0.509,
-        S4: 0.506, S5: 0.596).  The per-arm linear Cox PH cannot capture
+        S4: 0.508, S5: 0.595).  The per-arm linear Cox PH cannot capture
         non-monotone or interaction-based treatment effect surfaces.
   \item \textbf{Stratified CAVBoost excels when the subgroup boundary is
-        smooth} (S1: +16.6 AUC points, S3: +5.9).  The prognostic score
-        stratification aligns with smoothly varying treatment effects.
-  \item \textbf{Stratification hurts on disjoint or non-monotone boundaries}
-        (S4 Enclave: $-7.9$, S5 S-shaped: $-6.9$).  When the true subgroup
-        consists of disconnected regions in covariate space, the monotone
-        CoxPH-based prognostic stratification cannot capture the structure
-        and the gradient is misdirected.
+        smooth relative to prognosis} (S1: +12.3 AUC points, S3: +8.8,
+        S5: +7.8).  The cross-fitted prognostic stratification aligns with
+        smoothly varying treatment effects while the out-of-fold prediction
+        eliminates the training-set overlap bias.
+  \item \textbf{Stratification is neutral on disjoint boundaries}
+        (S4 Enclave: $-$0.014, within Monte Carlo error).  When the true
+        subgroup consists of disconnected regions in covariate space, the
+        Cox PH-based prognostic score cannot capture the structure, but
+        the original global gradient remains competitive.
   \item \textbf{Original CAVBoost is robust} across all scenarios
-        (0.80--0.92 AUC), making it a reliable baseline even without
-        stratification.
+        (0.76--0.84 AUC), making it a reliable all-purpose baseline.
 \end{itemize}
 
-These results suggest that stratified CAVBoost is most beneficial when
-the subgroup decision boundary is smooth relative to prognosis, and that
-adaptive stratification (recomputing strata during boosting) or
-prognostic scores based on flexible models might extend these gains
-to more complex boundaries.
+These results suggest that cross-fitted stratified CAVBoost is
+consistently beneficial on smooth or monotone boundaries and never
+catastrophically worse than the original.  The approach is
+recommended as the default when the treatment-effect boundary is\,
+believed to be continuous in the prognostic space.
+
+\subsection{Gradient Combination Attempts}
+
+Two approaches to combining the original and stratified gradients
+were evaluated: alternating rounds (original on odd rounds, stratified
+on even) and variance-gated blending ($\alpha_k$ derived from
+Greenwood variance per stratum).  Both failed on the complex boundary
+scenarios (AUC~0.55--0.60), because the two gradient functions are
+minimizing different estimands and their per-observation directions
+anti-correlate.  A holdout model-selection rule (train both models,
+pick by held-out RMST gain) was also tested; it over-selected the
+stratified model on S4 and S5 (where the original has a slight edge),
+demonstrating that 150-patient holdouts lack the power to reliably
+discriminate between the two methods.
 
 \end{document}
