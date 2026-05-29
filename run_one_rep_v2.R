@@ -71,9 +71,9 @@ if (!is.null(rf_c) && !is.null(rf_t)) {
   pt <- predict(rf_t, te_df[, !names(te_df) %in% "trt01p"])
   tg <- seq(0, tau, length.out = 200)
   surv_grid <- function(s, t, g) { apply(s, 1, function(r) approx(t, r, g, rule = 2, yleft = 1)$y) }
-  sc <- surv_grid(pc$survival, pc$unique.death.times, tg)
-  st <- surv_grid(pt$survival, pt$unique.death.times, tg)
-  vt <- colMeans(st) * tau - colMeans(sc) * tau
+  sc_grid <- surv_grid(pc$survival, pc$unique.death.times, tg)
+  st_grid <- surv_grid(pt$survival, pt$unique.death.times, tg)
+  vt <- colMeans(st_grid) * tau - colMeans(sc_grid) * tau
 }
 rm(rf_c, rf_t); gc()
 
