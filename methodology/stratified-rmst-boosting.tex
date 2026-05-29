@@ -45,18 +45,10 @@ gradient boosting trees.  The proposed refinement replaces the original
 pooled value function with one computed within prognostic strata and
 aggregated.
 
-There are two distinct ways to use stratification:
-\begin{enumerate}
-  \item \textbf{Stratified evaluation} (proven, \S\ref{sec:strat-eval}):
-        Train $p_i$ using the original CAVBoost, then evaluate subgroup
-        performance via the stratified value function.  This approach gave
-        a 64\% variance reduction in simulations.
-  \item \textbf{Stratified training} (experimental, \S\ref{sec:strat-train}):
-        Replace the value function used during boosting with the stratified
-        version.  The gradient is modified to incorporate stratum-specific
-        RMST differences.  This is mathematically sound but sensitive to
-        stratum size.
-\end{enumerate}
+We focus on \textbf{stratified training}, which replaces the value
+function used during boosting with the stratified version.  The
+gradient is modified to incorporate stratum-specific RMST differences.
+This is the version evaluated in the simulations below.
 
 % ======================================================================
 \section{Notation}
@@ -101,50 +93,6 @@ Stratify $s_i$ into $K$ groups by its quantiles.  Let $\mathcal{S}_k$
 be the index set of stratum $k$, with $n_k = |\mathcal{S}_k|$ patients.
 For $K = 4$, these are quartiles; $K = 6$ and $K = 8$ are used in
 sensitivity analyses.
-
-% ======================================================================
-\section{Stratified Evaluation}
-\label{sec:strat-eval}
-% ======================================================================
-
-In this mode, $p_i$ is trained using the original (unstratified) CAVBoost,
-and the stratification is applied only when evaluating the resulting
-subgroup.  This separates the learning problem (which the original
-CAVBoost handles well) from the evaluation problem (where stratification
-provides context-dependent insight).
-
-\subsection{Within-Stratum RMST Difference}
-
-Within each stratum $k$, compute two RMST differences, mirroring the
-original CAVBoost:\begin{itemize}
-  \item $d_k^{(1)}$: RMST difference (treated minus control) estimated
-        via $p_i$-weighted KM within stratum $k$;
-  \item $d_k^{(2)}$: RMST difference estimated via $(1-p_i)$-weighted KM
-        within stratum $k$.
-\end{itemize}
-These depend on $p_i$ through the weights, exactly as in the original.
-
-\subsection{Weighted Value Function}
-
-Given soft subgroup probabilities $p_i$, compute for each stratum:
-\[
-W_k = \sum_{i \in \mathcal{S}_k} p_i,\qquad
-n_k - W_k = \sum_{i \in \mathcal{S}_k} (1 - p_i).
-\]
-
-The stratified value function (unnormalized) is:
-\[
-V_{\text{strat}} =
-\sum_{k=1}^K W_k\, d_k^{(1)}
-\;\;\;\;\;\;-
-\;\;\;\;\;\;
-\sum_{k=1}^K (n_k - W_k)\, d_k^{(2)}.
-\]
-
-The $W_k$ and $n_k-W_k$ terms weight each stratum by the effective size
-of the treatment-preferring and control-preferring populations, making
-$V_{\text{strat}}$ a soft-weighted aggregate of stratum-level RMST
-differences.
 
 % ======================================================================
 \section{Stratified Training}
