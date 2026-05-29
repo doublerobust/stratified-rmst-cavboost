@@ -76,18 +76,31 @@ predicts survival under the control condition.  Because treatment is
 randomized, we can use all patients (both arms) to estimate $s_i$ as long
 as treatment is excluded from the predictor set.
 
-Three methods for constructing $s_i$:
+We use a cross-fitted elastic net Cox model to estimate $s_i$,
+balancing the need to handle $p \approx n/10$ covariates while
+avoiding overfit within each fold.  The implementation:
 \begin{enumerate}
-  \item \textbf{Pseudo-RMST + XGBoost}: Compute jackknife
-        pseudo-observations $\Prm{\mu}_i$ at $\tau$ using the
-        \texttt{pseudo} package, then fit XGBoost regression on
-        $\bm{Z}_i$ to predict $\Prm{\mu}_i$.  The prediction is $s_i$.
-  \item \textbf{XGBoost survival Cox}: Fit XGBoost with
-        \texttt{objective="survival:cox"} on $\bm{Z}_i$ (not treatment).
-        The linear predictor is $s_i$.
-  \item \textbf{Standard Cox PH}: Fit $\text{Cox}(\bm{Z}_i)$ and use the
-        linear predictor as $s_i$.
+  \item Partition the training data into $F = 5$ random folds.
+  \item For fold $f = 1,\dots,F$:
+    \begin{enumerate}
+      \item Fit $\texttt{cv.glmnet}(\bm{Z}, \text{Surv}(T,C),$
+            $\ \texttt{family="cox"}, \texttt{alpha=0.5})$ on the
+            out-of-fold observations.
+      \item Predict the linear predictor $s_i$ for in-fold
+            observations at $\texttt{lambda.min}$.
+    \end{enumerate}
+  \item Collect the out-of-fold predictions $\widehat{s}_i$ for all
+        training patients.
+  \item Define strata by $K$ quantiles of $\widehat{s}_i$.
 \end{enumerate}
+Cross-fitting ensures that the stratum assignment for each patient is
+independent of its own data, eliminating the training-set overlap bias
+that would arise from fitting and predicting on the same observations.
+The elastic net penalty (mixing parameter $\alpha=0.5$, cross-validated
+$\lambda$) automatically selects among the 52 covariates and shrinks
+noisy coefficients, which is essential when the Cox model is
+proportional-hazards misspecified (e.g., under the quadratic prognostic
+structure of Zhang scenarios~S4--S6).
 
 Stratify $s_i$ into $K$ groups by its quantiles.  Let $\mathcal{S}_k$
 be the index set of stratum $k$, with $n_k = |\mathcal{S}_k|$ patients.
@@ -228,8 +241,10 @@ sample.
 The algorithm mirrors the original CAVBoost, but the KM and influence
 computations loop over strata:
 \begin{enumerate}
-  \item Pre-compute prognostic score $s_i$ and stratum assignments
-        $\mathcal{S}_k$.  These are fixed.
+  \item Pre-compute cross-fitted prognostic score $\widehat{s}_i$ via
+        $5$-fold elastic net Cox (glmnet, $\alpha=0.5$) and stratum
+        assignments $\mathcal{S}_k$ by $K$ quantiles.  These are fixed
+        throughout boosting.
   \item Initialize $\eta_i = 0$ ($p_i = 0.5$).
   \item For each boosting round:
         \begin{enumerate}
@@ -269,8 +284,10 @@ only the loop structure changes.
 
 All classification metrics are computed on a held-out test set of the
 same size as the training set.  Three methods are compared:
-original CAVBoost, stratified CAVBoost ($K=4$, CoxPH prognostic score),
-and virtual twin (separate Cox PH per arm with RMST prediction).
+original CAVBoost, stratified CAVBoost ($K=4$, cross-fitted elastic net
+Cox prognostic score), and virtual twin (separate
+survival random forests (ranger, 200 trees,
+min node size~10, RMST difference via trapezoidal integration).
 
 \subsection{Complex Boundary Scenarios (Zhang et al. 2020)}
 
