@@ -3,7 +3,7 @@
 # Run: setsid bash run_sim_detached.sh &
 
 N_JOBS=6
-N_REPS=50
+N_REPS=200
 mkdir -p results_csv
 
 exec > /tmp/sim_final.log 2>&1
