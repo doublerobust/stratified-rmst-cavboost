@@ -10,7 +10,7 @@ Sys.setenv(R_DEFAULT_INTERNET_TIMEOUT = "600")
 
 tau <- 30; n_tr <- 500; n_te <- 2000; rho <- 1/3; nr <- 50
 Smat <- matrix(rho, 52, 52); diag(Smat) <- 1
-feat_prog <- c("Z1","Z2","Z3","Z4","S1","S2")
+
 
 run_one <- function(sc, rep) {
   set.seed(42 + rep * 1000 + sc * 100)
@@ -46,7 +46,8 @@ run_one <- function(sc, rep) {
   rm(fo)
   
   # Cross-fitted stratified (6 prognostic vars)
-  st_ <- tryCatch(crossfit_prognostic_strata(tr, feat_prog, nfold = 5, K = 4, seed = rep * 100 + sc), error = function(e) NULL)
+  feat_all <- colnames(X)  # all 52 covariates
+  st_ <- tryCatch(crossfit_prognostic_strata(tr, feat_all, nfold = 5, K = 4, seed = rep * 100 + sc), error = function(e) NULL)
   fs <- if (!is.null(st_)) tryCatch(train_stratified_cavboost(tr, tr$time, tr$status, tau, stratum = st_, eta = 0.1, max_depth = 2, nr = nr), error = function(e) NULL) else NULL
   ps <- if (!is.null(fs)) pred_stratified(fs, te_df) else rep(0.5, nrow(te_df))
   rm(fs)
