@@ -295,25 +295,28 @@ pred_stratified <- function(model, dat) {
 # =========================================================================
 # 6. Cross-fitted prognostic strata (avoids training-set overlap bias)
 # =========================================================================
-crossfit_prognostic_strata <- function(data, features,
+crossfit_prognostic_strata <- function(dat, features,
                                         time = "time", status = "status",
                                         nfold = 5, K = 4, seed = 42) {
-  n <- nrow(data)
+  n <- nrow(dat)
   set.seed(seed)
   folds <- sample(rep(1:nfold, length.out = n))
   lp <- numeric(n)
   
-  formula <- as.formula(paste("Surv(", time, ",", status, ") ~",
-                                paste(features, collapse = "+")))
+  x <- data.matrix(dat[, features, drop = FALSE])
+  y <- survival::Surv(dat[[time]], dat[[status]])
   
   for (fold in 1:nfold) {
     test_idx <- which(folds == fold)
     train_idx <- which(folds != fold)
-    fit <- coxph(formula, data = data[train_idx, ])
-    lp[test_idx] <- predict(fit, newdata = data[test_idx, ], type = "lp")
+    cv <- suppressWarnings(glmnet::cv.glmnet(x[train_idx, , drop = FALSE], y[train_idx],
+                              family = "cox", alpha = 0.5, nfolds = 5, cox.ties = "breslow"))
+    lp[test_idx] <- drop(stats::predict(cv, x[test_idx, , drop = FALSE],
+                                          s = "lambda.min"))
   }
   
-  qq <- stats::quantile(lp, seq(0, 1, 1 / K), na.rm = TRUE)
+  qq <- unique(stats::quantile(lp, seq(0, 1, 1 / K), na.rm = TRUE))
+  if (length(qq) < 2) return(rep(1, n))
   as.numeric(cut(lp, qq, include.lowest = TRUE, right = TRUE))
 }
 
