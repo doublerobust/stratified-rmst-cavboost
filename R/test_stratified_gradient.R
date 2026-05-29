@@ -16,13 +16,12 @@ K <- 4
 stratum <- as.numeric(cut(prog_score, quantile(prog_score, seq(0,1,1/K)), include.lowest=TRUE))
 
 # Build DMatrix with sorted strata (same as train_stratified_cavboost)
-ipcw_w <- compute_ipcw_weights(dat$U, dat$delta_tilde, tau)
 sorted_strata <- vector("list", K)
 for (k in 1:K) {
   idx <- which(stratum == k)
   if (length(idx) < 2) next
   sorted_strata[[k]] <- make_sorted_stratum(
-    dat$U[idx], dat$delta_tilde[idx], ipcw_w$weights[idx], dat$A[idx], tau)
+    dat$U[idx], dat$delta_tilde[idx], dat$A[idx], tau)
 }
 
 Xmat <- as.matrix(dat[, paste0("Z", 1:6)])

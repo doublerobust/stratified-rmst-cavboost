@@ -33,7 +33,7 @@ run_one <- function(params, label) {
     names(dt_te)[names(dt_te)=="U"]<-"time"; names(dt_te)[names(dt_te)=="delta_tilde"]<-"status"
     
     # Original CAVBoost
-    fit_o <- train_rmst_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,eta=0.05,max_depth=4,nr=50,covars=dt_tr[,paste0("Z",1:6)])
+    fit_o <- train_rmst_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,eta=0.05,max_depth=4,nr=50)
     po_tr <- pred_subgroup(fit_o,dt_tr)
     po_te <- pred_subgroup(fit_o,dt_te)
     
@@ -42,7 +42,7 @@ run_one <- function(params, label) {
     
     # Stratified (K=4)
     strat <- as.numeric(cut(ps,quantile(ps,seq(0,1,0.25)),include.lowest=TRUE))
-    fit_s <- tryCatch(train_stratified_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100,covars=dt_tr[,paste0("Z",1:6)]),error=function(e)NULL)
+    fit_s <- tryCatch(train_stratified_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100) ,error=function(e)NULL)
     
     if(!is.null(fit_s)){
       ps_tr <- pred_stratified(fit_s,dt_tr)

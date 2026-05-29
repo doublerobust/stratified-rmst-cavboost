@@ -70,12 +70,12 @@ for (rep in 1:n_sim) tryCatch({
   
   vt <- vt_rmst(dt_tr, dt_te)
   
-  fit_o <- train_rmst_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,eta=0.05,max_depth=4,nr=50,covars=dt_tr[,paste0("Z",1:6)])
+  fit_o <- train_rmst_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,eta=0.05,max_depth=4,nr=50)
   po_te <- pred_subgroup(fit_o,dt_te)
   
   ps <- predict(coxph(Surv(time,status)~Z1+Z2+Z3+Z4+Z5+Z6,data=dt_tr),type="lp")
   strat <- as.numeric(cut(ps,quantile(ps,seq(0,1,0.25)),include.lowest=TRUE))
-  fit_s <- tryCatch(train_stratified_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100,covars=dt_tr[,paste0("Z",1:6)]),error=function(e)NULL)
+  fit_s <- tryCatch(train_stratified_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100) ,error=function(e)NULL)
   ps_te <- if(!is.null(fit_s)) pred_stratified(fit_s,dt_te) else rep(0.5,n)
   
   cm <- function(p,t) {

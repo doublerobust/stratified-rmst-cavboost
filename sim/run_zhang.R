@@ -39,13 +39,13 @@ run_sc <- function(sc, label) {
     l_te <- d$oracle[-(1:n_tr)]
     f <- colnames(d$X)
 
-    fo <- train_rmst_cavboost(tr,tr$time,tr$status,tau,eta=0.05,max_depth=3,nr=50,covars=tr[,f])
+    fo <- train_rmst_cavboost(tr,tr$time,tr$status,tau,eta=0.05,max_depth=3,nr=50)
     po <- pred_subgroup(fo,te)
 
     ps <- tryCatch(predict(coxph(Surv(time,status)~.,data=tr[,c("time","status",f)]),type="lp"),error=function(e)NULL)
     if(!is.null(ps)) {
       st_ <- as.numeric(cut(ps,quantile(ps,seq(0,1,0.25),na.rm=T),include.lowest=TRUE))
-      fs <- tryCatch(train_stratified_cavboost(tr,tr$time,tr$status,tau,stratum=st_,eta=0.1,max_depth=2,nr=50,covars=tr[,f]),error=function(e)NULL)
+      fs <- tryCatch(train_stratified_cavboost(tr,tr$time,tr$status,tau,stratum=st_,eta=0.1,max_depth=2,nr=50) ,error=function(e)NULL)
     } else fs <- NULL
     ps_te <- if(!is.null(fs)) pred_stratified(fs,te) else rep(0.5,nrow(te))
 

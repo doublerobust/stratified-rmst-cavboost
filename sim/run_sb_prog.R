@@ -47,14 +47,14 @@ run_scenario <- function(prog_effect, label) {
     features <- colnames(X)
     
     # Original CAVBoost
-    fit_o <- tryCatch(train_rmst_cavboost(tr,tr$time,tr$status,tau,eta=0.05,max_depth=4,nr=50,covars=tr[,features]),error=function(e)NULL)
+    fit_o <- tryCatch(train_rmst_cavboost(tr,tr$time,tr$status,tau,eta=0.05,max_depth=4,nr=50) ,error=function(e)NULL)
     if(is.null(fit_o)) next
     
     # Stratified CAVBoost (K=4)
     ps <- tryCatch(predict(coxph(Surv(time,status)~.,data=tr[,c("time","status",features)]),type="lp"),error=function(e)NULL)
     if(is.null(ps)) { p_s_te <- rep(0.5,nrow(te)) } else {
       strat <- as.numeric(cut(ps,quantile(ps,seq(0,1,0.25),na.rm=T),include.lowest=TRUE))
-      fit_s <- tryCatch(train_stratified_cavboost(tr,tr$time,tr$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100,covars=tr[,features]),error=function(e)NULL)
+      fit_s <- tryCatch(train_stratified_cavboost(tr,tr$time,tr$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100) ,error=function(e)NULL)
       p_s_te <- if(!is.null(fit_s)) pred_stratified(fit_s, te) else rep(0.5,nrow(te))
     }
     

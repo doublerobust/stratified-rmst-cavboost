@@ -37,7 +37,7 @@ for (rep in 1:n_sim) tryCatch({
   dt<-dat;names(dt)[names(dt)=="A"]<-"trt01p"
   names(dt)[names(dt)=="U"]<-"time";names(dt)[names(dt)=="delta_tilde"]<-"status"
   
-  fit_o <- train_rmst_cavboost(dt,dt$time,dt$status,tau,eta=0.05,max_depth=4,nr=50,covars=dt[,paste0("Z",1:6)])
+  fit_o <- train_rmst_cavboost(dt,dt$time,dt$status,tau,eta=0.05,max_depth=4,nr=50)
   p_o <- pred_subgroup(fit_o,dt)
   res <- rbind(res, data.frame(rep=rep,method="Original",prog="none",K=NA,t(cm(p_o,tb))))
   
@@ -46,7 +46,7 @@ for (rep in 1:n_sim) tryCatch({
     if(is.null(ps)) next
     for(Ki in K_vals){
       strat <- as.numeric(cut(ps,quantile(ps,seq(0,1,1/Ki),na.rm=T),include.lowest=TRUE))
-      fit_s <- tryCatch(train_stratified_cavboost(dt,dt$time,dt$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100,covars=dt[,paste0("Z",1:6)]),error=function(e)NULL)
+      fit_s <- tryCatch(train_stratified_cavboost(dt,dt$time,dt$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100) ,error=function(e)NULL)
       if(!is.null(fit_s)) res <- rbind(res, data.frame(rep=rep,method="Stratified",prog=pn,K=Ki,t(cm(pred_stratified(fit_s,dt),tb))))
     }
   }
