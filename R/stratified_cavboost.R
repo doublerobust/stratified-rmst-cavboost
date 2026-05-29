@@ -37,7 +37,7 @@ make_sorted_stratum <- function(time, status, trt, tau) {
 #    sign_j = +1 for subgroup 1 (w = p), −1 for subgroup 2 (w = 1−p).
 #    The sign is applied by the caller in stratum_gradient_components.
 # =========================================================================
-hazard_inc <- function(in_e, in_r, w_total, n) {
+hazard_inc_strat <- function(in_e, in_r, w_total, n) {
   denom <- sum(w_total[in_r])
   if (denom <= 0) return(list(h = 0, g = rep(0, n)))
   nume <- sum(w_total[in_e])
@@ -89,15 +89,15 @@ stratum_gradient_components <- function(p_sorted, sd, tau) {
     Y2_trt <- sum(w2[in_r1]); Y2_ctrl <- sum(w2[in_r0])
     d2_trt <- sum(w2[in_e1]); d2_ctrl <- sum(w2[in_e0])
     
-    ht <- hazard_inc(in_e1, in_r1, w1, n_k)
-    hc <- hazard_inc(in_e0, in_r0, w1, n_k)
+    ht <- hazard_inc_strat(in_e1, in_r1, w1, n_k)
+    hc <- hazard_inc_strat(in_e0, in_r0, w1, n_k)
     H1 <- H1 + c(ht$h, hc$h)
     gH1[[1]] <- gH1[[1]] + ht$g
     gH1[[2]] <- gH1[[2]] + hc$g
     S1 <- exp(-H1)
     
-    ht2 <- hazard_inc(in_e1, in_r1, w2, n_k)
-    hc2 <- hazard_inc(in_e0, in_r0, w2, n_k)
+    ht2 <- hazard_inc_strat(in_e1, in_r1, w2, n_k)
+    hc2 <- hazard_inc_strat(in_e0, in_r0, w2, n_k)
     H2 <- H2 + c(ht2$h, hc2$h)
     gH2[[1]] <- gH2[[1]] + ht2$g
     gH2[[2]] <- gH2[[2]] + hc2$g
@@ -206,10 +206,10 @@ stratified_loss_vg <- function(preds, dtrain) {
       Y_trt2 <- sum((1-ps)[in_r1]); Y_ctrl2 <- sum((1-ps)[in_r0])
       d_trt2 <- sum((1-ps)[in_e1]); d_ctrl2 <- sum((1-ps)[in_e0])
       
-      ht <- hazard_inc(in_e1, in_r1, ps, n)
-      hc <- hazard_inc(in_e0, in_r0, ps, n)
-      hh1 <- hazard_inc(in_e1, in_r1, 1 - ps, n)
-      hh0 <- hazard_inc(in_e0, in_r0, 1 - ps, n)
+      ht <- hazard_inc_strat(in_e1, in_r1, ps, n)
+      hc <- hazard_inc_strat(in_e0, in_r0, ps, n)
+      hh1 <- hazard_inc_strat(in_e1, in_r1, 1 - ps, n)
+      hh0 <- hazard_inc_strat(in_e0, in_r0, 1 - ps, n)
       H <- H + c(ht$h, hc$h, hh1$h, hh0$h)
       gH[[1]] <- gH[[1]] + ht$g; gH[[2]] <- gH[[2]] + hc$g
       gH[[3]] <- gH[[3]] + hh1$g; gH[[4]] <- gH[[4]] + hh0$g
