@@ -160,6 +160,34 @@ pred_stratified <- function(model, dat) {
 # =========================================================================
 # 6. Training
 # =========================================================================
+# =========================================================================
+# 6. Cross-fitted prognostic strata (avoids training-set overlap bias)
+# =========================================================================
+crossfit_prognostic_strata <- function(data, features,
+                                        time = "time", status = "status",
+                                        nfold = 5, K = 4, seed = 42) {
+  n <- nrow(data)
+  set.seed(seed)
+  folds <- sample(rep(1:nfold, length.out = n))
+  lp <- numeric(n)
+  
+  formula <- as.formula(paste("Surv(", time, ",", status, ") ~",
+                                paste(features, collapse = "+")))
+  
+  for (fold in 1:nfold) {
+    test_idx <- which(folds == fold)
+    train_idx <- which(folds != fold)
+    fit <- coxph(formula, data = data[train_idx, ])
+    lp[test_idx] <- predict(fit, newdata = data[test_idx, ], type = "lp")
+  }
+  
+  qq <- stats::quantile(lp, seq(0, 1, 1 / K), na.rm = TRUE)
+  as.numeric(cut(lp, qq, include.lowest = TRUE, right = TRUE))
+}
+
+# =========================================================================
+# 7. Training
+# =========================================================================
 train_stratified_cavboost <- function(dat, time, status, tau, stratum,
                                        eta = 0.05, max_depth = 4, nr = 50) {
   if ("A" %in% names(dat) && !("trt01p" %in% names(dat))) dat$trt01p <- dat$A

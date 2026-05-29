@@ -37,12 +37,11 @@ run_one <- function(params, label) {
     po_tr <- pred_subgroup(fit_o,dt_tr)
     po_te <- pred_subgroup(fit_o,dt_te)
     
-    # Prognostic score
-    ps <- predict(coxph(Surv(time,status)~Z1+Z2+Z3+Z4+Z5+Z6,data=dt_tr),type="lp")
-    
-    # Stratified (K=4)
-    strat <- as.numeric(cut(ps,quantile(ps,seq(0,1,0.25)),include.lowest=TRUE))
-    fit_s <- tryCatch(train_stratified_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100) ,error=function(e)NULL)
+    # Cross-fitted prognostic score → stratified (K=4)
+    feat_fit <- c("Z1","Z2","Z3","Z4","Z5","Z6")
+    strat <- tryCatch(crossfit_prognostic_strata(dt_tr, feat_fit, nfold=5, K=4, seed=rep*100),
+                       error=function(e) NULL)
+    fit_s <- if(!is.null(strat)) tryCatch(train_stratified_cavboost(dt_tr,dt_tr$time,dt_tr$status,tau,stratum=strat,eta=0.1,max_depth=3,nr=100) ,error=function(e)NULL) else NULL
     
     if(!is.null(fit_s)){
       ps_tr <- pred_stratified(fit_s,dt_tr)

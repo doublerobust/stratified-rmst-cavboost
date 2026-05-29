@@ -42,11 +42,9 @@ run_sc <- function(sc, label) {
     fo <- train_rmst_cavboost(tr,tr$time,tr$status,tau,eta=0.05,max_depth=3,nr=50)
     po <- pred_subgroup(fo,te)
 
-    ps <- tryCatch(predict(coxph(Surv(time,status)~.,data=tr[,c("time","status",f)]),type="lp"),error=function(e)NULL)
-    if(!is.null(ps)) {
-      st_ <- as.numeric(cut(ps,quantile(ps,seq(0,1,0.25),na.rm=T),include.lowest=TRUE))
-      fs <- tryCatch(train_stratified_cavboost(tr,tr$time,tr$status,tau,stratum=st_,eta=0.1,max_depth=2,nr=50) ,error=function(e)NULL)
-    } else fs <- NULL
+    st_ <- tryCatch(crossfit_prognostic_strata(tr, f, nfold=5, K=4, seed=rep*100+sc),
+                      error=function(e) NULL)
+    fs <- if(!is.null(st_)) tryCatch(train_stratified_cavboost(tr,tr$time,tr$status,tau,stratum=st_,eta=0.1,max_depth=2,nr=50) ,error=function(e)NULL) else NULL
     ps_te <- if(!is.null(fs)) pred_stratified(fs,te) else rep(0.5,nrow(te))
 
     ctrl <- tr[tr$trt01p==0,]; trt_d <- tr[tr$trt01p==1,]

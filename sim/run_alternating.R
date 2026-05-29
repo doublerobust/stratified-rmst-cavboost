@@ -42,22 +42,14 @@ run_alt <- function(scenario, sc) {
     if (is.null(fo)) { cat(sprintf("orig fail %s %d\n", scenario, rep)); next }
     po <- pred_subgroup(fo, te_df)
 
-    # Stratified (Cox on 6 vars only, not all 52)
-    ps_cph <- tryCatch(predict(coxph(Surv(time, status) ~ Z1+Z2+Z3+Z4+S1+S2, data = tr), type = "lp"),
-                        error = function(e) NULL)
-    if (is.null(ps_cph)) {
-      ps_te <- rep(0.5, nrow(te_df))
-    } else {
-      qq <- stats::quantile(ps_cph, c(0.25, 0.5, 0.75), na.rm = TRUE)
-      st_ <- as.numeric(ps_cph <= qq[1]) +
-             as.numeric(ps_cph > qq[1] & ps_cph <= qq[2]) +
-             as.numeric(ps_cph > qq[2] & ps_cph <= qq[3]) +
-             as.numeric(ps_cph > qq[3])
-      fs <- tryCatch(train_stratified_cavboost(tr, tr$time, tr$status, tau, stratum = st_,
+    # Stratified (cross-fitted Cox on 6 vars only, not all 52)
+    feat_fit <- c("Z1","Z2","Z3","Z4","S1","S2")
+    st_ <- tryCatch(crossfit_prognostic_strata(tr, feat_fit, nfold=5, K=4, seed=rep*100+sc),
+                     error = function(e) NULL)
+    fs <- if (!is.null(st_)) tryCatch(train_stratified_cavboost(tr, tr$time, tr$status, tau, stratum = st_,
                                                 eta = 0.1, max_depth = 2, nr = nr),
-                      error = function(e) NULL)
-      ps_te <- if (!is.null(fs)) pred_stratified(fs, te_df) else rep(0.5, nrow(te_df))
-    }
+                      error = function(e) NULL) else NULL
+    ps_te <- if (!is.null(fs)) pred_stratified(fs, te_df) else rep(0.5, nrow(te_df))
 
     # Alternating: build custom eta vector round by round (no IPCW)
     sd_orig <- make_sorted_data(tr$time, tr$status, rep(1, n_tr), tr$trt01p, tau)
