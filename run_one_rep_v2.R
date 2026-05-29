@@ -16,7 +16,7 @@ auc_ <- function(p,l) {
   npos <- sum(l); nneg <- sum(!l)
   if (npos < 1 || nneg < 1) return(NA)
   r <- rank(p)
-  (sum(r[l]) - npos * (npos + 1) / 2) / (npos * nneg)
+  (sum(r[as.logical(l)]) - npos * (npos + 1) / 2) / (npos * nneg)
 }
 
 # DGP

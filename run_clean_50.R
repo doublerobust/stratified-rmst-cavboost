@@ -9,7 +9,7 @@ tau <- 30; n_tr <- 500; n_te <- 2000
 Smat <- matrix(1/3, 52, 52); diag(Smat) <- 1
 nr <- 50; n_sim <- 50
 
-auc_ <- function(p,l){npos<-sum(l);nneg<-sum(!l);if(npos<1||nneg<1)return(NA);r<-rank(p);abs((sum(r[l])-npos*(npos+1)/2)/(npos*nneg))}
+auc_ <- function(p,l){npos<-sum(l);nneg<-sum(!l);if(npos<1||nneg<1)return(NA);r<-rank(p);(sum(r[as.logical(l)])-npos*(npos+1)/2)/(npos*nneg)}
 # ^ abs() to handle inverted predictions
 
 sc_names <- list("1"="S1_Linear","2"="S2_Diff","3"="S3_U",
