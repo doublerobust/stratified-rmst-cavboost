@@ -1,0 +1,444 @@
+\documentclass[11pt,letterpaper]{article}
+
+% ---- Packages ----
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage{graphicx}
+
+% ---- Math commands ----
+\newcommand{\ind}[1]{\mathbf{1}\{#1\}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\V}{\mathbb{V}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\trt}{\text{t}}
+\newcommand{\ctrl}{\text{c}}
+\newcommand{\pr}{\text{pr}}
+\newcommand{\tp}{\text{tx}}
+\newcommand{\cp}{\text{cx}}
+\newcommand{\Prm}[1]{\widetilde{#1}}
+\newcommand{\sgn}{\operatorname{sgn}}
+
+\title{\vspace{-1.5cm}%
+  \textbf{Stratified RMST Boosting for Subgroup Identification}\\[4pt]
+  \large Augmenting the Value Function with Prognostic Strata}
+\author{Yue Shentu \& Natasha}
+\date{May 28, 2026\\[6pt]\small Revised v2: corrected gradient scaling}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ======================================================================
+\section{Introduction}
+% ======================================================================
+
+This document defines a stratified version of RMST-based subgroup boosting
+(``RMST CAVBoost'').  The original method learns a soft subgroup
+assignment $p_i \in [0,1]$ (the probability that patient $i$ belongs to the
+treatment-preferring subgroup) by optimizing a value function through
+gradient boosting trees.  The proposed refinement replaces the original
+pooled value function with one computed within prognostic strata and
+aggregated.
+
+There are two distinct ways to use stratification:
+\begin{enumerate}
+  \item \textbf{Stratified evaluation} (proven, \S\ref{sec:strat-eval}):
+        Train $p_i$ using the original CAVBoost, then evaluate subgroup
+        performance via the stratified value function.  This approach gave
+        a 64\% variance reduction in simulations.
+  \item \textbf{Stratified training} (experimental, \S\ref{sec:strat-train}):
+        Replace the value function used during boosting with the stratified
+        version.  The gradient is modified to incorporate stratum-specific
+        RMST differences.  This is mathematically sound but sensitive to
+        stratum size.
+\end{enumerate}
+
+% ======================================================================
+\section{Notation}
+% ======================================================================
+
+For each subject $i = 1,\dots,N$, we observe:
+\begin{itemize}
+  \item $\bm{Z}_i$: $p$-vector of baseline covariates;
+  \item $A_i \in \{0,1\}$: treatment (1 = active, 0 = control);
+  \item $U_i = \min(T_i, C_i, \tau)$: observed time;
+  \item $\widetilde\delta_i = \ind{\min(T_i,\tau) \le C_i}$: event within
+        $\tau$ before censoring.
+\end{itemize}
+
+The restricted mean survival time (RMST) at horizon $\tau$ is
+$\mu(\tau) = \int_0^\tau S(t)\,dt$, estimated by the area under the
+Kaplan--Meier curve.
+
+% ======================================================================
+\section{Prognostic Stratification}
+% ======================================================================
+
+A prognostic score $s_i$ is a univariate summary of $\bm{Z}_i$ that
+predicts survival under the control condition.  Because treatment is
+randomized, we can use all patients (both arms) to estimate $s_i$ as long
+as treatment is excluded from the predictor set.
+
+Three methods for constructing $s_i$:
+\begin{enumerate}
+  \item \textbf{Pseudo-RMST + XGBoost}: Compute jackknife
+        pseudo-observations $\Prm{\mu}_i$ at $\tau$ using the
+        \texttt{pseudo} package, then fit XGBoost regression on
+        $\bm{Z}_i$ to predict $\Prm{\mu}_i$.  The prediction is $s_i$.
+  \item \textbf{XGBoost survival Cox}: Fit XGBoost with
+        \texttt{objective="survival:cox"} on $\bm{Z}_i$ (not treatment).
+        The linear predictor is $s_i$.
+  \item \textbf{Standard Cox PH}: Fit $\text{Cox}(\bm{Z}_i)$ and use the
+        linear predictor as $s_i$.
+\end{enumerate}
+
+Stratify $s_i$ into $K$ groups by its quantiles.  Let $\mathcal{S}_k$
+be the index set of stratum $k$, with $n_k = |\mathcal{S}_k|$ patients.
+For $K = 4$, these are quartiles; $K = 6$ and $K = 8$ are used in
+sensitivity analyses.
+
+% ======================================================================
+\section{Stratified Evaluation}
+\label{sec:strat-eval}
+% ======================================================================
+
+In this mode, $p_i$ is trained using the original (unstratified) CAVBoost,
+and the stratification is applied only when evaluating the resulting
+subgroup.  This separates the learning problem (which the original
+CAVBoost handles well) from the evaluation problem (where stratification
+provides context-dependent insight).
+
+\subsection{Within-Stratum RMST Difference}
+
+Within each stratum $k$, compute two RMST differences, mirroring the
+original CAVBoost:\begin{itemize}
+  \item $d_k^{(1)}$: RMST difference (treated minus control) estimated
+        via $p_i$-weighted KM within stratum $k$;
+  \item $d_k^{(2)}$: RMST difference estimated via $(1-p_i)$-weighted KM
+        within stratum $k$.
+\end{itemize}
+These depend on $p_i$ through the weights, exactly as in the original.
+
+\subsection{Weighted Value Function}
+
+Given soft subgroup probabilities $p_i$, compute for each stratum:
+\[
+W_k = \sum_{i \in \mathcal{S}_k} p_i,\qquad
+n_k - W_k = \sum_{i \in \mathcal{S}_k} (1 - p_i).
+\]
+
+The stratified value function (unnormalized) is:
+\[
+V_{\text{strat}} =
+\sum_{k=1}^K W_k\, d_k^{(1)}
+\;\;\;\;\;\;-
+\;\;\;\;\;\;
+\sum_{k=1}^K (n_k - W_k)\, d_k^{(2)}.
+\]
+
+The $W_k$ and $n_k-W_k$ terms weight each stratum by the effective size
+of the treatment-preferring and control-preferring populations, making
+$V_{\text{strat}}$ a soft-weighted aggregate of stratum-level RMST
+differences.
+
+% ======================================================================
+\section{Stratified Training}
+\label{sec:strat-train}
+% ======================================================================
+
+In this mode, the value function used during XGBoost training is itself
+stratified.  This changes the gradient that each tree fits, potentially
+altering the learned $p_i$.
+
+\subsection{Value Function}
+
+The stratified value function mirrors the original CAVBoost structure
+exactly, but applied within each stratum.  Recall that the original
+value function is:
+\[
+V_{\text{orig}} = \Bigl(\sum_i p_i\Bigr)\widehat\Delta^{(1)}
+                - \Bigl(\sum_i (1-p_i)\Bigr)\widehat\Delta^{(2)},
+\]
+where $\widehat\Delta^{(1)}$ uses $p_i$-weighted KM (subgroup 1,
+treatment-preferring) and $\widehat\Delta^{(2)}$ uses $(1-p_i)$-weighted
+KM (subgroup 2, control-preferring).
+
+The stratified version applies the same logic within each stratum $k$.
+Define within-stratum subgroup~1 KM (p-weighted) and subgroup~2 KM
+((1-p)-weighted), giving two RMST differences per stratum:
+
+\begin{align*}
+d_k^{(1)} &=
+  \widehat\mu_{1,k}^{(1)}(\tau) - \widehat\mu_{0,k}^{(1)}(\tau),\\
+d_k^{(2)} &=
+  \widehat\mu_{1,k}^{(2)}(\tau) - \widehat\mu_{0,k}^{(2)}(\tau),
+\end{align*}
+where $\widehat\mu_{a,k}^{(1)}(\tau)$ is the $p$-weighted KM RMST within
+stratum $k$, arm $a$, and $\widehat\mu_{a,k}^{(2)}(\tau)$ is the
+$(1-p)$-weighted equivalent.
+
+The stratified value function is:
+
+\[
+\boxed{
+V_{\text{strat}}(\bm{p}) =
+\sum_{k=1}^K W_k\, d_k^{(1)}
+\;\;\;\;\;\;\;\;-
+\;\;\;\;\;\;\;\;
+\sum_{k=1}^K (n_k - W_k)\, d_k^{(2)}
+}
+\]
+where $W_k = \sum_{i\in\mathcal{S}_k} p_i$ and $n_k = |\mathcal{S}_k|$.
+
+This is the same \emph{difference of deltas} format as the original, but
+the KM computations are restricted to each stratum.  No normalization by
+$N$ is applied, matching the scale convention of the original.
+
+\subsection{Analytic Gradient}
+
+The gradient mirrors the original CAVBoost derivation.  For patient $j$
+in stratum $k$, taking the derivative of each term in $V_{\text{strat}}$
+with respect to $\eta_j = \log(p_j/(1-p_j))$:
+
+\textbf{Term 1:} $\displaystyle\frac{\partial}{\partial\eta_j}\bigl[W_k\,d_k^{(1)}\bigr]
+= p_j(1-p_j)\,d_k^{(1)} + W_k\,\frac{\partial d_k^{(1)}}{\partial\eta_j}$
+
+\textbf{Term 2:} $\displaystyle-\frac{\partial}{\partial\eta_j}\bigl[(n_k-W_k)\,d_k^{(2)}\bigr]
+= p_j(1-p_j)\,d_k^{(2)} - (n_k-W_k)\,\frac{\partial d_k^{(2)}}{\partial\eta_j}$
+
+The chain rule $\partial d_k^{(g)}/\partial\eta_j =
+p_j(1-p_j)\,\partial d_k^{(g)}/\partial p_j$ gives the full gradient:
+
+\[
+\boxed{
+\frac{\partial V_{\text{strat}}}{\partial\eta_j}
+= p_j(1-p_j)\Bigl[
+  d_k^{(1)} + d_k^{(2)}
+  + W_k\,\frac{\partial d_k^{(1)}}{\partial p_j}
+  - (n_k-W_k)\,\frac{\partial d_k^{(2)}}{\partial p_j}
+\Bigr].
+}
+\]
+
+The XGBoost loss function minimizes, so the gradient passed to the tree
+learner is $g_j = -\partial V_{\text{strat}}/\partial\eta_j$.
+
+\paragraph{The influence functions.}
+The terms $\partial d_k^{(1)}/\partial p_j$ and
+$\partial d_k^{(2)}/\partial p_j$ are the derivatives of the
+within-stratum $p$-weighted and $(1-p)$-weighted RMST differences with
+respect to patient $j$'s subgroup probability.  They are computed by the
+same influence-function machinery as the original CAVBoost (the
+$\text{hazard\_inc}$ function in the R code), evaluated on the events
+within stratum $k$ only.  The per-stratum computation is $K$ times
+faster than the full-sample version because each stratum has roughly
+$n_k \approx N/K$ patients.
+
+\paragraph{Block-diagonal structure.}
+A critical property: $\partial d_k^{(g)}/\partial p_j = 0$ for $j \notin
+\mathcal{S}_k$, because patient~$j$ does not contribute to the KM within
+stratum~$k$.  This means the gradient for patient~$j$ depends only on
+patients in the same stratum.  The XGBoost regression tree must therefore
+learn stratum-relevant splits from the feature vector $\bm{Z}_j$, relying
+on the fact that the prognostic score $s_i$ (used to define strata) is a
+function of $\bm{Z}_i$.
+
+\paragraph{Connection to the original.}
+The original CAVBoost gradient (from \texttt{rmst\_cavboost\_clean.R}) is:
+\[
+g_j^{\text{(orig)}} = -p_j(1-p_j)\Big[
+\widehat\Delta^{(1)} + \Bigl(\sum_i p_i\Bigr)\frac{\partial
+  \widehat\Delta^{(1)}}{\partial p_j}
++ \widehat\Delta^{(2)} - \Bigl(\sum_i (1-p_i)\Bigr)\frac{\partial
+  \widehat\Delta^{(2)}}{\partial p_j}
+\Big].
+\]
+The stratified version is identical in structure, but with each term
+replaced by its stratum-level analogue:
+\begin{align*}
+\widehat\Delta^{(1)} &\;\leftrightarrow\; d_k^{(1)},
+& \widehat\Delta^{(2)} &\;\leftrightarrow\; d_k^{(2)},\\
+\sum_i p_i &\;\leftrightarrow\; W_k,
+& \sum_i (1-p_i) &\;\leftrightarrow\; n_k-W_k,\\
+\frac{\partial\widehat\Delta^{(1)}}{\partial p_j}
+&\;\leftrightarrow\; \frac{\partial d_k^{(1)}}{\partial p_j},
+&
+\frac{\partial\widehat\Delta^{(2)}}{\partial p_j}
+&\;\leftrightarrow\; \frac{\partial d_k^{(2)}}{\partial p_j}.
+\end{align*}
+The implementation is a direct modification of the original: the
+KM/hazard-increment computation loops over strata instead of the full
+sample.
+
+\subsection{Implementation}
+
+The algorithm mirrors the original CAVBoost, but the KM and influence
+computations loop over strata:
+\begin{enumerate}
+  \item Pre-compute prognostic score $s_i$ and stratum assignments
+        $\mathcal{S}_k$.  These are fixed.
+  \item Initialize $\eta_i = 0$ ($p_i = 0.5$).
+  \item For each boosting round:
+        \begin{enumerate}
+          \item Compute $p_i = 1/(1+e^{-\eta_i})$.
+          \item For each stratum $k$:
+            \begin{enumerate}
+              \item Compute $p$-weighted KM within $\mathcal{S}_k$,
+                    get $d_k^{(1)}$ and influence $\partial d_k^{(1)}/\partial p_j$.
+              \item Compute $(1-p)$-weighted KM within $\mathcal{S}_k$,
+                    get $d_k^{(2)}$ and influence $\partial d_k^{(2)}/\partial p_j$.
+              \item Assemble gradient for patients in $\mathcal{S}_k$:
+                    $g_j = -p_j(1-p_j)[d_k^{(1)} + d_k^{(2)}
+                    + W_k\,\partial d_k^{(1)}/\partial p_j
+                    - (n_k-W_k)\,\partial d_k^{(2)}/\partial p_j]$.
+            \end{enumerate}
+          \item Fit a regression tree to $\{g_j, \bm{Z}_j\}$.
+          \item Update $\eta_i \leftarrow \eta_i + \eta_{\text{boost}}
+                \times \text{tree}(\bm{Z}_i)$.
+        \end{enumerate}
+  \item After training: $\widehat G_i = \ind{p_i > 0.5}$.
+\end{enumerate}
+
+This is a direct adaptation of the original CAVBoost gradient, replacing
+the global weighted~KM with per-stratum weighted~KM.  The R functions
+from \texttt{rmst\_cavboost\_clean.R}---in particular the hazard
+increment and sorted-data machinery---are reused without modification;
+only the loop structure changes.
+
+
+
+
+
+% ======================================================================
+\section{Simulation Results}
+\label{sec:results}
+% ======================================================================
+
+All classification metrics are computed on a held-out test set of the
+same size as the training set.  Three methods are compared:
+original CAVBoost, stratified CAVBoost ($K=4$, CoxPH prognostic score),
+and virtual twin (separate Cox PH per arm with RMST prediction).
+
+\subsection{Primary DGP}
+
+Survival follows a Weibull model with $p = 6$ covariates ($Z_1, Z_2$
+prognostic; $Z_3$ prognostic and predictive; $Z_4$--$Z_6$ noise),
+$N_{\text{train}} = N_{\text{test}} = 300$, $\tau = 12$, $\approx 30\%$
+censoring.  Results from 50 Monte Carlo reps:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Method & AUC & Accuracy & FPR & FNR \\
+\midrule
+Original CAVBoost & 0.602 & 0.574 & 0.492 & 0.416 \\
+\textbf{Stratified} (K=4) & \textbf{0.635} & \textbf{0.636} & \textbf{0.481} & \textbf{0.342} \\
+Virtual Twin (Cox PH) & 0.705 & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The stratified version improves AUC by 3.3 points over the original
+and reduces FNR by 7.4 percentage points, catching more true
+benefitters.  Virtual twin achieves higher AUC but requires fitting
+separate survival models per arm.
+
+\subsection{Pure Predictive (No Prognostic Noise)}
+
+Removing all prognostic effects ($\alpha_1 = \alpha_2 = 0$,
+$z_3^{\text{prog}} = 0$), only $Z_3$ modifies the treatment effect:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Method & AUC & Accuracy & FPR & FNR \\
+\midrule
+Original CAVBoost & 0.620 & 0.641 & 0.529 & 0.326 \\
+\textbf{Stratified} (K=4) & \textbf{0.656} & \textbf{0.654} & \textbf{0.452} & \textbf{0.326} \\
+Virtual Twin (Cox PH) & 0.706 & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Stratification improves AUC by 3.6 points even without prognostic
+confounding, showing it also reduces variance from noise covariates.
+
+\subsection{Stronger Signal (SubgroupBoost-Style DGP)}
+
+With $p = 24$ covariates (1 predictive $s_1$, 3 prognostic, 20 noise),
+balanced 50\% benefit rate, $N_{\text{train}} = N_{\text{test}} = 600$,
+adopting the \textit{Zhang et al. (2020)} simulation structure:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Method & AUC & Accuracy & FPR & FNR \\
+\midrule
+Original CAVBoost & 0.679 & 0.713 & 0.522 & 0.242 \\
+\textbf{Stratified} (K=4) & \textbf{0.740} & \textbf{0.757} & \textbf{0.469} & \textbf{0.200} \\
+Virtual Twin (Cox PH) & 0.762 & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The stratification gain is largest here: AUC +6.1 points and FPR -5.3
+points.  The gap to virtual twin shrinks from 8.3 points (original) to
+2.2 points.
+
+\subsection{Complex Boundary Scenarios}
+
+\label{sec:complex}
+
+The \textit{Zhang et al. (2020)} paper defines four additional scenarios
+with increasing boundary complexity, using 52 covariates (50 noise, 2
+predictive $S_1, S_2$), $N_{\text{train}} = 500$, $N_{\text{test}} = 2000$,
+and 4 prognostic covariates with effect $\beta_Z = 0.4$ (Setting~2).
+In these scenarios the treatment effect surface is nonlinear, which
+exposes the limitations of the linear Cox PH model used by virtual
+twin.
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{4}{c}{Hold-out AUC} \\
+\cmidrule{2-5}
+Scenario (boundary) & Original & \textbf{Stratified} & VT & Gain \\
+\midrule
+S1: Linear ($S_1 = 0$) & 0.798 & \textbf{0.964} & 0.956 & $+$0.166\\
+S3: U-shaped ($S_1$) & 0.918 & \textbf{0.977} & 0.509 & $+$0.059\\
+S4: Enclave ($S_1 \times S_2$) & 0.844 & 0.765 & 0.506 & $-$0.079\\
+S5: S-shaped ($S_1$, disjoint) & 0.918 & 0.849 & 0.596 & $-$0.069\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The key findings are:
+\begin{itemize}
+  \item \textbf{Virtual twin collapses on nonlinear boundaries} (S3: 0.509,
+        S4: 0.506, S5: 0.596).  The per-arm linear Cox PH cannot capture
+        non-monotone or interaction-based treatment effect surfaces.
+  \item \textbf{Stratified CAVBoost excels when the subgroup boundary is
+        smooth} (S1: +16.6 AUC points, S3: +5.9).  The prognostic score
+        stratification aligns with smoothly varying treatment effects.
+  \item \textbf{Stratification hurts on disjoint or non-monotone boundaries}
+        (S4 Enclave: $-7.9$, S5 S-shaped: $-6.9$).  When the true subgroup
+        consists of disconnected regions in covariate space, the monotone
+        CoxPH-based prognostic stratification cannot capture the structure
+        and the gradient is misdirected.
+  \item \textbf{Original CAVBoost is robust} across all scenarios
+        (0.80--0.92 AUC), making it a reliable baseline even without
+        stratification.
+\end{itemize}
+
+These results suggest that stratified CAVBoost is most beneficial when
+the subgroup decision boundary is smooth relative to prognosis, and that
+adaptive stratification (recomputing strata during boosting) or
+prognostic scores based on flexible models might extend these gains
+to more complex boundaries.
+
+\end{document}
