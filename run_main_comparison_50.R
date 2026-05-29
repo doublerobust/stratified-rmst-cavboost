@@ -52,12 +52,26 @@ run_one <- function(sc, rep) {
   ps <- if (!is.null(fs)) pred_stratified(fs, te_df) else rep(0.5, nrow(te_df))
   rm(fs)
   
-  # VT: Cox per arm
-  fm <- paste("Surv(time,status)~", paste(colnames(X), collapse = "+"))
+  # VT: survival random forest per arm (ranger)
   ctrl <- tr[tr$trt01p == 0, ]; trt_d <- tr[tr$trt01p == 1, ]
-  fc <- tryCatch(coxph(as.formula(fm), data = ctrl, x = TRUE), error = function(e) NULL)
-  ft <- tryCatch(coxph(as.formula(fm), data = trt_d, x = TRUE), error = function(e) NULL)
-  vt <- if (!is.null(fc) && !is.null(ft)) predict(ft, te_df, type = "lp") - predict(fc, te_df, type = "lp") else rep(0, nrow(te_df))
+  vt <- rep(0, nrow(te_df))
+  rf_c <- tryCatch(ranger::ranger(Surv(time, status) ~ ., data = ctrl[, !names(ctrl) %in% "trt01p"],
+                                   num.trees = 200, min.node.size = 10, seed = 42), error = function(e) NULL)
+  rf_t <- tryCatch(ranger::ranger(Surv(time, status) ~ ., data = trt_d[, !names(trt_d) %in% "trt01p"],
+                                   num.trees = 200, min.node.size = 10, seed = 42), error = function(e) NULL)
+  if (!is.null(rf_c) && !is.null(rf_t)) {
+    pc <- predict(rf_c, te_df[, !names(te_df) %in% "trt01p"])
+    pt <- predict(rf_t, te_df[, !names(te_df) %in% "trt01p"])
+    # RMST via mean survival on a fine grid
+    tg <- seq(0, tau, length.out = 200)
+    surv_grid <- function(surv_mat, times, grid) {
+      apply(surv_mat, 1, function(s) {
+        approx(times, s, grid, rule = 2, yleft = 1)$y
+      }) }
+    sc <- surv_grid(pc$survival, pc$unique.death.times, tg)
+    st <- surv_grid(pt$survival, pt$unique.death.times, tg)
+    vt <- colMeans(st) * tau - colMeans(sc) * tau
+  }
   
   data.frame(
     sc = sc, rep = rep,
