@@ -18,49 +18,20 @@ library(xgboost)
 library(survival)
 library(dplyr)
 
-compute_ipcw_weights <- function(time, status, tau, covars = NULL, trt = NULL, eps = 0.05) {
-  Y <- pmin(time, tau)
-  delta_tilde <- status | (time >= tau)
-  cens_ind <- 1 - status
-  if (is.null(covars)) {
-    fit_cens <- survfit(Surv(time, cens_ind) ~ 1)
-    G_hat <- approx(fit_cens$time, fit_cens$surv, xout = Y, rule = 2, yleft = 1)$y
-  } else {
-    cm <- as.matrix(covars)
-    if (!is.null(trt)) cm <- cbind(cm, trt = trt)
-    colnames(cm) <- make.names(colnames(cm), unique = TRUE)
-    cd <- data.frame(time = time, event = cens_ind, cm)
-    tryCatch({
-      cf <- as.formula(paste("Surv(time, event) ~", paste(colnames(cm), collapse = "+")))
-      cx <- coxph(cf, data = cd, ties = "breslow")
-      bh <- basehaz(cx, centered = FALSE)
-      lp <- predict(cx, newdata = cd, type = "lp")
-      G_hat <- sapply(seq_along(Y), function(i) {
-        idx <- max(which(bh$time <= Y[i]))
-        if (is.infinite(idx) || idx < 1) 1 else exp(-bh$hazard[idx] * exp(lp[i]))
-      })
-    }, error = function(e) {
-      fit_cens <<- survfit(Surv(time, cens_ind) ~ 1)
-      G_hat <<- approx(fit_cens$time, fit_cens$surv, xout = Y, rule = 2, yleft = 1)$y
-    })
-  }
-  G_hat <- pmax(G_hat, eps)
-  list(weights = delta_tilde / G_hat, G_hat = G_hat)
-}
 
-make_sorted_data <- function(time, status, ipcw, trt, tau) {
+make_sorted_data <- function(time, status, trt, tau) {
   n <- length(time)
   ord <- order(time)
-  list(time = time[ord], status = status[ord], ipcw = ipcw[ord], trt = trt[ord],
+  list(time = time[ord], status = status[ord], trt = trt[ord],
        ord = ord, iord = order(ord), n = n, tau = tau)
 }
 
-hazard_inc <- function(in_e, in_r, w_total, ipcw_vec, n) {
+hazard_inc <- function(in_e, in_r, w_total, n) {
   denom <- sum(w_total[in_r])
   if (denom <= 0) return(list(h = 0, g = rep(0, n)))
   nume <- sum(w_total[in_e])
   inc <- nume / denom
-  g <- (ipcw_vec / denom) * (as.numeric(in_e) - inc * as.numeric(in_r))
+  g <- (1 / denom) * (as.numeric(in_e) - inc * as.numeric(in_r))
   list(h = inc, g = g)
 }
 
@@ -81,8 +52,8 @@ rmst_cavboost_loss <- function(preds, dtrain) {
   gH <- list(rep(0, n), rep(0, n), rep(0, n), rep(0, n))
   dRMST <- c(0, 0)
   gRMST <- list(rep(0, n), rep(0, n))
-  w1 <- p * sd$ipcw
-  w2 <- (1 - p) * sd$ipcw
+  w1 <- p
+  w2 <- (1 - p)
   for (idx in seq_along(event_times)) {
     ti <- event_times[idx]
     dti <- dt[idx]
@@ -90,10 +61,10 @@ rmst_cavboost_loss <- function(preds, dtrain) {
     in_r0 <- sd$time >= ti & sd$trt == av[2]
     in_e1 <- sd$time == ti & sd$status == 1 & sd$trt == av[1]
     in_e0 <- sd$time == ti & sd$status == 1 & sd$trt == av[2]
-    r1t <- hazard_inc(in_e1, in_r1, w1, sd$ipcw, n)
-    r1c <- hazard_inc(in_e0, in_r0, w1, sd$ipcw, n)
-    r2t <- hazard_inc(in_e1, in_r1, w2, sd$ipcw, n)
-    r2c <- hazard_inc(in_e0, in_r0, w2, sd$ipcw, n)
+    r1t <- hazard_inc(in_e1, in_r1, w1, n)
+    r1c <- hazard_inc(in_e0, in_r0, w1, n)
+    r2t <- hazard_inc(in_e1, in_r1, w2, n)
+    r2c <- hazard_inc(in_e0, in_r0, w2, n)
     H <- H + c(r1t$h, r1c$h, r2t$h, r2c$h)
     gH[[1]] <- gH[[1]] + r1t$g
     gH[[2]] <- gH[[2]] + r1c$g
@@ -125,8 +96,8 @@ rmst_cavboost_eval <- function(preds, dtrain) {
   dt <- event_times - c(0, event_times[-length(event_times)])
   H <- c(0, 0, 0, 0)
   dRMST <- c(0, 0)
-  w1 <- p * sd$ipcw
-  w2 <- (1 - p) * sd$ipcw
+  w1 <- p
+  w2 <- (1 - p)
   for (idx in seq_along(event_times)) {
     ti <- event_times[idx]; dti <- dt[idx]
     in_r1 <- sd$time >= ti & sd$trt == av[1]
@@ -143,11 +114,9 @@ rmst_cavboost_eval <- function(preds, dtrain) {
   err <- -(sum(p_raw) * dRMST[1] - sum(1 - p_raw) * dRMST[2])
   list(metric = "OTR_error", value = if (is.na(err) || is.infinite(err)) 1e10 else err)
 }
-
 train_rmst_cavboost <- function(dat, time, status, tau,
                                  eta = 0.05, max_depth = 4, nr = 50, covars = NULL) {
-  ipcw <- compute_ipcw_weights(time, status, tau, covars, dat$trt01p)
-  sorted_data <- make_sorted_data(time, status, ipcw$weights, dat$trt01p, tau)
+  sorted_data <- make_sorted_data(time, status, dat$trt01p, tau)
   Xmat <- as.matrix(select(dat, -trt01p, -time, -status))
   dtrain <- xgb.DMatrix(Xmat, label = dat$trt01p)
   attr(dtrain, "sorted_data") <- sorted_data
@@ -187,15 +156,11 @@ if (interactive() || Sys.getenv("RMST_CLEAN_TEST") == "1") {
   train <- gen_surv_data(600)
   test <- gen_surv_data(2000)
   cat(sprintf("Train: n=%d, true sg proportion: %.3f\n", nrow(train$dat), mean(train$true)))
-  cat(sprintf("Test: n=%d, true sg proportion: %.3f\n", nrow(test$dat), mean(test$true)))
-  cat(sprintf("Tau = %.2f (train), %.2f (test)\n", train$tau, test$tau))
   cat("\n--- Gradient Verification ---\n")
   cat("Comparing analytic vs numerical gradient (first 5 obs)...\n")
   sub_idx <- 1:200
   mtest <- train$dat[sub_idx, ]
-  ipcw_sub <- compute_ipcw_weights(mtest$time, mtest$status, train$tau,
-    covars = mtest[, c("Z1","Z2","Z3","Z4","Z5","Z6","Z7")], trt = mtest$trt01p)
-  sd_sub <- make_sorted_data(mtest$time, mtest$status, ipcw_sub$weights, mtest$trt01p, train$tau)
+  sd_sub <- make_sorted_data(mtest$time, mtest$status, mtest$trt01p, train$tau)
   Xsub <- as.matrix(select(mtest, -trt01p, -time, -status))
   dt_sub <- xgb.DMatrix(Xsub, label = mtest$trt01p)
   attr(dt_sub, "sorted_data") <- sd_sub

@@ -364,7 +364,7 @@ train_stratified_cavboost_vg <- function(dat, time, status, tau, stratum,
   if ("delta_tilde" %in% names(dat) && !("status" %in% names(dat))) status <- dat$delta_tilde
   
   # Global sorted data (original CAVBoost style, no IPCW)
-  sd_orig <- make_sorted_data(time, status, rep(1, length(time)), dat$trt01p, tau)
+  sd_orig <- make_sorted_data(time, status, dat$trt01p, tau)
   
   # Per-stratum sorted data
   K <- max(stratum)
