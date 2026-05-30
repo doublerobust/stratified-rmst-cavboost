@@ -20,15 +20,72 @@ sample size, censoring rate, and the shape of the treatment-effect
 boundary.  Rather than fixing K = 4, we learn a **gating function** that
 predicts the optimal K from these observable features.
 
-## Advantages Over 3-Expert MoE
+## MoE-K vs. Cross-Validation
 
-| | 3-Expert MoE | Within-Family K-Selection |
+The most natural baseline: fit RMSTBoost for K = 1..5, pick the one with
+the best cross-validated AUC.  MoE-K should outperform CV because:
+
+| | MoE-K | CV |
 |---|---|---|
-| Model class | Orig, StratCF, VT (heterogeneous) | RMSTBoost only (homogeneous) |
-| Gate's job | "Which model class?" | "How much stratification?" |
-| Failure mode | Wrong expert → disaster | Suboptimal K → slight efficiency loss |
-| Regulatory path | Hard (multiple models) | Easier (one tunable method) |
-| Computational cost | 3x model fitting | 1x model fit at chosen K |
+| **Training labels** | Oracle (true test AUC on 2,000 held-out patients) | Noisy CV estimates with large SE |
+| **At n = 200** | Gate learns small-sample patterns | CV can't distinguish K=2 from K=4 (SE ≈ 0.02 on a 0.01 AUC gap) |
+| **At n = 2000** | May be comparable | CV works well |
+| **Cost (new dataset)** | One Cox fit + 40 summary stats + matrix multiply (~0.5s) | 25 RMSTBoost fits (~5 min) |
+| **Interpretability** | ~5–15 non-zero LASSO coefficients | "CV said K=4" |
+
+**Hypothesis:** MoE-K's advantage over CV is largest at small n and
+diminishes as sample size grows.  The gate learns from oracle labels
+across 1,000 simulation reps, effectively pooling information across
+datasets in a way that a single-dataset CV cannot.
+
+This is itself a publishable secondary result: **the sample size regime
+where pre-trained gates beat cross-validation.**
+
+## Training Data Design
+
+### Sample Size
+
+Train the gate on the same sample sizes we deploy on.  Early-phase
+oncology trials typically run n = 200–1000.  Simulate at multiple n levels
+and include **n as an explicit gate feature**, so the gate learns:
+
+- "At n = 200, even strong prognostic signal is noisy → conservative K = 2–3"
+- "At n = 1000, clean signal → aggressive K = 5"
+- "At n = 500, moderate signal → K = 4 unless ΔC-index is very small"
+
+Sampling plan (n × 5 reps = 1,000 runs total):
+
+| n | Configurations | Reps | Total runs | Rationale |
+|---|---|---|---|---|
+| 200 | 40 | 5 | 200 | Smallest realistic, worst-case for CV |
+| 300 | 40 | 5 | 200 | Typical Phase Ib/IIa |
+| 500 | 80 | 5 | 400 | Our current simulation N, sweet spot |
+| 1000 | 40 | 5 | 200 | Larger, CV starts working well |
+
+The gate's LASSO will decide whether n is useful as a main effect,
+whether it interacts with other features, or whether it's dominated by
+other signals.
+
+### Parametric Scenario Sampler
+
+Sample across continuous axes using a parametric boundary generator:
+
+| Parameter | Range | Notes |
+|---|---|---|
+| Boundary family | {linear, additive, bump, enclave, S-shaped, cross, radial} | Plus random combinations |
+| # predictive variables | 1–10 | True treatment-effect modifiers |
+| # prognostic variables | 0–52 | Affect baseline hazard only |
+| Overlap of predictive/prognostic | {none, partial, complete} | |
+| Prognostic strength (b₀) | 0–2 | Baseline log-HR |
+| Prognostic form | {linear, quadratic, step, saturating} | |
+| Censoring rate | 10%–70% | At τ = 30 |
+| Covariate correlation | {low, moderate, high} | Block-diagonal or AR(1) |
+
+Target: 200 diverse configurations per n, 5 reps each.
+
+The key insight (from Yue's observation): we don't need many reps per
+configuration.  The trend is clear after 3–5 reps.  Diversity of
+configurations matters more than precision within a configuration.
 
 ## Feature Library (~40 dataset-level descriptors)
 
@@ -43,59 +100,47 @@ All computable in one pass on the training data (no CV):
 6. Ratio of top 10% to bottom 10% hazard
 
 ### B. Interaction Structure (compare Z-only vs Z+A models)
-7. ΔC-index: Cox(Z × A) minus Cox(Z only)
+7. ΔC-index: Cox(Z + A + Z:A) minus Cox(Z)
 8. Log-rank test p-value: Cox residuals split by treatment
-9. Interaction F-test p-value from Cox with Z + Z:A
-10. Proportion of β_trt interactions with p < 0.1
-11. Concordance of stratified KM (by prognostic quartile) curves
+9. Proportion of β_trt interactions with p < 0.1
+10. Interaction F-test p-value from Cox with Z + Z:A
 
 ### C. Treatment Effect Profile (bin prognostic score)
-12. Variance of RMST difference across 4 bins
-13. Slope of RMST difference vs. mean-bin score
-14. Deviation from linearity (quadratic contrast) in RMST bins
-15. Maximum pairwise RMST diff between bins
-16. Within-bin event rate range
+11. Variance of RMST difference across 4 bins
+12. Slope of RMST difference vs. mean-bin score
+13. Deviation from linearity (quadratic contrast) in RMST bins
+14. Maximum pairwise RMST diff between bins
 
 ### D. Data Quality
-17. Censoring rate (overall and per arm)
-18. Event count and event rate per arm
-19. Mean / median follow-up time
-20. Proportion of events past τ/2
-21. Ratio of events to covariates (E/p)
+15. Censoring rate (overall and per arm)
+16. Event count and event rate per arm
+17. Mean / median follow-up time
+18. Ratio of events to covariates (E/p)
 
 ### E. Sample Efficiency Indicators
-22. Leave-one-out stability of Cox coefficients
-23. Bootstrap variance of C-index estimate
-24. Effective sample size (information-based)
+19. Bootstrap variance of Cox C-index (uncertainty in prognostic signal)
+20. Effective sample size (information-based)
 
-### F. Oracle-Derived (from model outputs on validation split)
-25. Orig RMSTBoost internal prediction variance
-26. StratCF (K=4) internal prediction variance
-27. Pairwise prediction MSE between Orig and StratCF
-28. Mean subgroup probability (p_i) for each model
-29. Proportion of patients with p_i in [0.4, 0.6] (ambiguity zone)
+### F. Internal Model Behavior (Orig RMSTBoost on training data)
+21. Prediction variance (Orig model)
+22. StratCF (K=4) prediction variance
+23. Pairwise prediction MSE between Orig and StratCF (K=4)
+24. Mean subgroup probability (p_i) for each K level
+25. Proportion of patients with p_i in ambiguity zone [0.4, 0.6]
 
-## Simulation Data Generator
+### G. Context
+26. Sample size n (explicit feature — critical for scaling)
+27. Number of covariates p
 
-Sample across continuous axes using a parametric boundary generator:
+## Gate Architecture
 
-| Parameter | Range | Notes |
-|---|---|---|
-| Boundary family | {linear, additive, bump, enclave, S-shaped, cross, radial} | Plus random combinations |
-| # predictive variables | 1–10 | True treatment-effect modifiers |
-| # prognostic variables | 0–52 | Affect baseline hazard only |
-| Overlap of predictive/prognostic | {none, partial, complete} | |
-| Prognostic strength (b₀) | 0–2 | Baseline log-HR |
-| Prognostic form | {linear, quadratic, step, saturating} | |
-| Sample size (train) | 100, 200, 300, 500, 1000, 2000 | |
-| Censoring rate | 10%–70% | At τ = 30 |
-| Covariate correlation | {low, moderate, high} | Block-diagonal or AR(1) |
+### Training Labels
+For each simulation rep:
+1. Fit RMSTBoost for each K ∈ {1, 2, 3, 4, 5} on training data
+2. Evaluate AUC on held-out test data (n = 2000)
+3. Oracle label = argmax_k AUC_k
 
-**Target:** 200 diverse configurations × 5 reps = 1,000 runs.
-
-## Gate Training
-
-### Architecture
+### Model
 Regularized multinomial logistic regression (LASSO) with softmax output
 over K ∈ {1, 2, 3, 4, 5}:
 
@@ -103,53 +148,79 @@ over K ∈ {1, 2, 3, 4, 5}:
 P(K = k | x) = exp(β_k · x) / Σ_j exp(β_j · x)
 ```
 
-where x is the 40-dimensional feature vector.
-
-### Training Labels
-For each simulation rep:
-1. Fit RMSTBoost for each K ∈ {1, 2, 3, 4, 5} on training data
-2. Evaluate AUC on held-out test data
-3. Label = argmax_k AUC_k
+where x is the ~40-dimensional feature vector (standardized).
 
 ### Optimization
 - Loss: categorical cross-entropy
 - Regularization: 10-fold CV to select LASSO λ
-- Class balancing: K=1 and K=5 may be rare; use synthetic oversampling or
-  weighted loss
+- The intercept terms encode the *marginal* preference for each K when no
+  features are informative (e.g., if the null simulation says K=4 is best
+  on average)
 
-### Validation
-1. **Within-family**: 80/20 train/test split across all reps
-2. **Cross-boundary**: train on linear+additive+bump families, test on
-   enclave+S-shaped+cross (hard generalization)
-3. **Null simulation**: train gate on active-treatment data; test on data
-   with no treatment effect → gate should output K ≈ 1 (no stratification
-   needed when no subgroups exist)
+### Class Balancing
+K=1 and K=5 may be rare in some regimes.  Use balanced accuracy or
+weighted loss if needed.
+
+## Validation Strategy
+
+### 1. Within-Family (reproducibility)
+80/20 train/test split across all 1,000 runs.  Checks that the gate
+learns reproducible patterns.
+
+### 2. Cross-Boundary (generalization)
+Train on {linear, additive, bump} families.  Test on {enclave, S-shaped,
+cross, radial}.  This is the hardest test: does the gate learn general
+data properties, not just boundary-specific lookup tables?
+
+### 3. Null Simulation (no treatment effect)
+Gate sees data where A is randomly assigned and has no true effect.
+Optimal K should = 1 (no stratification needed when no subgroups exist).
+Gate should output K=1 or weight all K equally.
+
+### 4. Comparison Against CV Baseline
+For each rep in the test set, compare:
+- **Oracle AUC**: best possible (max over K from test data)
+- **MoE-K AUC**: gate-chosen K
+- **CV AUC**: 5-fold CV chosen K
+- **Default AUC**: fixed K=4
+
+The difference (oracle − MoE-K) vs (oracle − CV) is the primary metric.
+
+### 5. Feature Selection Analysis
+Which 5–15 features does LASSO retain?
+- If ΔC-index is selected → the gate is using interaction strength
+- If n is selected → sample size matters for K choice
+- If score skewness is selected → enclave detection is happening
+
+This becomes the interpretability result in the paper.
 
 ## Expected Deliverables
 1. Parametric scenario sampler (R)
 2. Gate feature extraction pipeline (R)
-3. Trained LASSO gate (small coefficient vector, ~5–15 non-zero)
-4. Validation report showing:
-   - AUC gain from adaptive K vs. fixed K=4
-   - Which features are selected by LASSO (interpretability)
-   - Gate performance on held-out boundary families
+3. Trained LASSO gate (coefficient vector, ~5–15 non-zero)
+4. Validation report:
+   - AUC(adaptive K) vs AUC(fixed K=4) vs AUC(CV) vs AUC(oracle)
+   - Performance stratified by n
+   - Cross-boundary generalization results
+   - Null simulation results
+   - Selected features and their interpretation
 
-## File Structure (on moe-integration branch)
+## File Structure
 ```
 moe/
-├── scenario_generator.R    # Parametric scenario sampler
-├── moe_simulation.R        # Full simulation (data gen → fit → eval → feature extract)
-├── gate_features.R          # Feature computation from training data
-├── train_gate.R            # LASSO gate training
-├── evaluate_gate.R         # Validation on held-out scenarios
-├── gate_coefficients.csv   # Trained gate output
-└── README.md               # This plan
+├── README.md                  # This plan
+├── scenario_generator.R       # Parametric scenario sampler
+├── moe_simulation.R           # Full simulation (data gen → fit → eval → feature extract)
+├── gate_features.R            # Feature computation from training data
+├── train_gate.R               # LASSO gate training
+├── evaluate_gate.R            # Validation on held-out scenarios
+├── gate_coefficients.csv      # Trained gate output
+└── report.md                  # Validation report
 ```
 
 ## Open Questions
 1. How much does adaptive K gain over fixed K=4? (Primary result.)
-2. Which 5–10 features does LASSO select? (Interpretability finding.)
+2. When does MoE-K beat CV? At n=200? n=500? (Secondary result.)
 3. Does the gate generalize to boundary families it never saw? (Robustness.)
-4. can we run 1,000 simulation runs in ~1 hour on Omen? (Feasibility.)
-5. Should K be an integer (discrete choice) or a real-valued smoothing
-   parameter? (Design decision.)
+4. Should K be an integer (discrete choice) or a real-valued K for a
+   smoother bias-variance tradeoff? (Design decision.)
