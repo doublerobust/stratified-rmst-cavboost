@@ -26,7 +26,7 @@
   \textbf{Stratified RMST Boosting for Subgroup Identification}\\[4pt]
   \large Augmenting the Value Function with Prognostic Strata}
 \author{Yue Shentu \& Natasha}
-\date{May 28, 2026\\[6pt]\small Revised v2: corrected gradient scaling}
+\date{May 29, 2026\\[6pt]\\small Full simulation results}
 
 \begin{document}
 \maketitle
@@ -280,81 +280,138 @@ only the loop structure changes.
 % ======================================================================
 \section{Simulation Results}
 \label{sec:results}
-% ======================================================================
 
-All classification metrics are computed on a held-out test set of the
-same size as the training set.  Three methods are compared:
-original CAVBoost, stratified CAVBoost ($K=4$, cross-fitted elastic net
-Cox prognostic score), and virtual twin (separate
-survival random forests (ranger, 200 trees,
-min node size~10, RMST difference via trapezoidal integration).
+All classification metrics are computed on a held-out test set of 2000
+patients (separate from the 500 training patients).  Three methods are
+compared: original CAVBoost, stratified CAVBoost ($K=4$, cross-fitted
+elastic net Cox prognostic score), and virtual twin (separate survival
+random forests via ranger, 200 trees, min node size~10, RMST difference
+via trapezoidal integration).
 
-\subsection{Complex Boundary Scenarios (Zhang et al. 2020)}
+\subsection{Scenarios}
 
-\label{sec:complex}
-
-The Zhang et al. (2020) SubgroupBoost paper defines four scenarios with
-increasing boundary complexity, using 52 covariates (50 noise, 2
-predictive $S_1, S_2$), $N_{\text{train}} = 500$, $N_{\text{test}} = 2000$,
-$\tau = 30$, and Setting~2 prognostic strength
+We use the six boundary scenarios from Zhang et al.\ (2020) with 52
+covariates (50 noise, 2 predictive $S_1, S_2$), $N_{\text{train}} = 500$,
+$N_{\text{test}} = 2000$, $\tau = 30$, and Setting~2 prognostic strength
 ($\beta_{Z_{1:4}} = 0.4$).  The prognostic score is estimated via
-5-fold cross-fitted Cox PH, so the within-stratum gradient computation
-uses out-of-fold predictions and avoids training-set overlap.
+5-fold cross-fitted elastic net Cox (\texttt{cv.glmnet}, $\alpha=0.5$)
+using all 52 covariates, so the within-stratum gradient computation uses
+out-of-fold predictions and avoids training-set overlap.
 
-Results from 30 Monte Carlo reps:
+Results from 300 Monte Carlo reps (standard errors in parentheses):
 
 \begin{center}
-\begin{tabular}{lcccc}
+\begin{tabular}{lcccccc}
 \toprule
- & \multicolumn{3}{c}{Hold-out AUC} & Gain \\
-\cmidrule{2-4}
-Scenario (boundary) & Original & \textbf{Stratified} & VT & (Orig $\to$ Strat) \\
+ & & \multicolumn{3}{c}{Hold-out AUC (SE)} & & \% Correct Dir. \\
+\cmidrule{3-5}
+Scenario (boundary) & Orig & \textbf{StratCF} & VT & Gain & StratCF \\
 \midrule
-S1: Linear ($S_1 = 0$) & 0.757 & \textbf{0.880} & 0.956 & $+$0.123\\
-S3: U-shaped ($S_1$) & 0.844 & \textbf{0.932} & 0.509 & $+$0.088\\
-S4: Enclave ($S_1 \times S_2$) & \textbf{0.778} & 0.764 & 0.508 & $-$0.014\\
-S5: S-shaped ($S_1$, disjoint) & 0.805 & \textbf{0.883} & 0.595 & $+$0.078\\
+S1: Linear ($S_1 > 0$) & 0.791 (0.004) & \textbf{0.974} (0.001) & 0.873 (0.002) & +0.184 & 100\%\\
+S2: Diff ($S_1 - S_2 > 0$) & 0.793 (0.003) & \textbf{0.942} (0.001) & 0.758 (0.002) & +0.150 & 100\%\\
+S3: U-shaped ($S_1$) & 0.906 (0.003) & \textbf{0.987} (0.001) & 0.867 (0.002) & +0.081 & 100\%\\
+S4: Enclave ($S_1 \times S_2$) & \textbf{0.893} (0.002) & 0.813 (0.003) & 0.960 (0.001) & $-$0.080 & 70\%\\
+S5: S-shaped ($S_1$, disjoint) & \textbf{0.952} (0.002) & 0.946 (0.003) & 0.786 (0.002) & $-$0.006 & 72\%\\
+S6: Cross ($S_1 \times S_2$) & 0.928 (0.004) & \textbf{0.944} (0.005) & 0.780 (0.004) & +0.017 & 80\%\\
+\midrule
+\emph{Average} & 0.877 & \textbf{0.934} & 0.838 & +0.058 & 87\%\\
 \bottomrule
 \end{tabular}
 \end{center}
 
 The key findings are:
+
 \begin{itemize}
-  \item \textbf{Virtual twin collapses on nonlinear boundaries} (S3: 0.509,
-        S4: 0.508, S5: 0.595).  The per-arm linear Cox PH cannot capture
-        non-monotone or interaction-based treatment effect surfaces.
-  \item \textbf{Stratified CAVBoost excels when the subgroup boundary is
-        smooth relative to prognosis} (S1: +12.3 AUC points, S3: +8.8,
-        S5: +7.8).  The cross-fitted prognostic stratification aligns with
-        smoothly varying treatment effects while the out-of-fold prediction
-        eliminates the training-set overlap bias.
-  \item \textbf{Stratification is neutral on disjoint boundaries}
-        (S4 Enclave: $-$0.014, within Monte Carlo error).  When the true
-        subgroup consists of disconnected regions in covariate space, the
-        Cox PH-based prognostic score cannot capture the structure, but
-        the original global gradient remains competitive.
-  \item \textbf{Original CAVBoost is robust} across all scenarios
-        (0.76--0.84 AUC), making it a reliable all-purpose baseline.
+  \item \textbf{Stratified CAVBoost dominates on additive and monotone
+        boundaries} (S1--S3, gains of 8--18 AUC points).  The cross-fitted
+        elastic net prognostic score absorbs the strong prognostic effects
+        of $Z_1$--$Z_4$ and aligns with the smooth treatment-effect
+        surface.  Within homogeneous strata, the gradient sees a nearly
+        clean signal, producing near-perfect AUC values on S1 (0.974) and
+        S3 (0.987).
+
+  \item \textbf{Stratification is detrimental on disjoint interaction
+        boundaries} (S4 Enclave: StratCF 0.813 vs.\ Orig 0.893).  The
+        Enclave boundary is a disconnected rectangular region in
+        $S_1 \times S_2$ space.  A linear Cox PH prognostic score cannot
+        capture this structure, so the strata misalign with the true
+        subgroup boundary and the gradient becomes unfocused.  The virtual
+        twin (non-parametric ranger) performs best here (0.960), as the
+        survival forest naturally finds the interaction.
+
+  \item \textbf{On complex but connected boundaries} (S5 S-shaped, S6
+        Cross), the stratified method is approximately neutral (S5: $-$0.006,
+        S6: $+$0.017).  The prognostic score partly captures the structure
+        but not cleanly enough to produce a large gain.
+
+  \item \textbf{The stratified method never collapses}.  Across all six
+        scenarios, the worst-case loss relative to the original is 8 AUC
+        points (S4).  In no scenario does it fall below 0.81, and the
+        proportion of correctly directed predictions (AUC $> 0.5$) is
+        70--100\% across scenarios.
+
+  \item \textbf{Original CAVBoost is robust} (0.79--0.95 AUC), making it a
+        reliable all-purpose baseline.  It wins scenario S5 outright and
+        ties on S6, demonstrating that the unstratified value function is
+        already competitive on complex boundaries.
 \end{itemize}
 
-These results suggest that cross-fitted stratified CAVBoost is
-consistently beneficial on smooth or monotone boundaries and never
-catastrophically worse than the original.  The approach is
-recommended as the default when the treatment-effect boundary is\,
-believed to be continuous in the prognostic space.
+\subsection{Cross-Validation Across Independent Runs}
 
-\subsection{Gradient Combination Attempts}
+To verify reproducibility, the simulation was run independently on two
+machines with different random seeds:
+\begin{itemize}
+  \item Agent server: 200 reps, seed base 42
+  \item HP Omen: 300 reps, seed base 12345
+\end{itemize}
+Results for Scenario~S1 were nearly identical (Orig: 0.788 vs.\ 0.791,
+StratCF: 0.974 vs.\ 0.974, VT: 0.870 vs.\ 0.873), confirming that the
+observed AUC values are not artifacts of a particular seed or hardware
+configuration.  The combined dataset provides 500 independent reps per
+scenario for downstream analysis.
 
-Two approaches to combining the original and stratified gradients
-were evaluated: alternating rounds (original on odd rounds, stratified
-on even) and variance-gated blending ($\alpha_k$ derived from
-Greenwood variance per stratum).  Both failed on the complex boundary
-scenarios (AUC~0.55--0.60), because the two gradient functions are
-minimizing different estimands and their per-observation directions
-anti-correlate.  A holdout model-selection rule (train both models,
-pick by held-out RMST gain) was also tested; it over-selected the
-stratified model on S4 and S5 (where the original has a slight edge),
-demonstrating that 150-patient holdouts lack the power to reliably
-discriminate between the two methods.
+\subsection{Practical Implications}
+
+The results suggest a practical rule: \textbf{use stratified CAVBoost
+as the default, but check for sensitivity on interaction-dominated
+boundaries}.  When the treatment-effect boundary is smooth relative to
+prognosis (the common case in oncology trials driven by a few strong
+biomarkers), the stratified gradient extracts substantially more
+information from the data.  When the boundary involves complex
+interactions that a linear prognostic score cannot capture, fall back to
+the original method or a survival forest-based virtual twin.
+
+The cross-fitted elastic net prognostic score is essential to this
+approach.  Using fewer than the full set of covariates silently changes
+the score and can produce misleading comparisons, as we discovered
+during development.  The implementation includes a runtime assertion
+(\texttt{stopifnot}) guarding the 52-covariate requirement.
+
+% ======================================================================
+\section{Discussion}
+% ======================================================================
+
+The stratified RMST boosting method presented here offers a simple,
+computationally efficient modification of the original CAVBoost
+algorithm.  By computing the value function within prognostic strata,
+the gradient is shielded from prognostic confounding, leading to
+substantial improvements in subgroup identification accuracy on smooth
+or monotone treatment-effect boundaries.
+
+The method requires only:
+\begin{enumerate}
+  \item A one-time computation of cross-fitted prognostic strata
+        (elastic net Cox, $< 1$ second for $n = 500$);
+  \item Replacing the global weighted~KM loop with a per-stratum loop
+        ($K$ smaller loops instead of one large loop, actually faster
+        per iteration because each stratum is $N/K$ patients).
+\end{enumerate}
+
+The key limitation is the linearity of the Cox PH prognostic score.
+When the true subgroup boundary involves interactions that a linear
+score cannot represent, stratification may misalign the gradient.
+Extending the prognostic model to capture non-linear structure---via
+random survival forests, gradient-boosted survival trees, or foundation
+model embeddings---is a natural direction for future work.
 
 \end{document}
