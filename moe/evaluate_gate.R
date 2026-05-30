@@ -23,6 +23,8 @@ NR <- 30  # Use same as main simulation
 .cov <- function(d) setdiff(names(d), c("trt01p","time","status","A","U","delta_tilde"))
 
 auc_ <- function(p, l) {
+  ok <- !is.na(p) & !is.na(l)
+  p <- p[ok]; l <- l[ok]
   npos <- sum(l); nneg <- sum(!l)
   if (npos < 1 || nneg < 1) return(NA)
   r <- rank(p)
