@@ -92,8 +92,9 @@ for (i in seq_along(test_files)) {
     corr = cfg$corr, n_train = cfg$n_train, n_test = 2000,
     tau = TAU, seed = seed + 100)
   if (is.null(d)) next
+  if (is.null(d)) next
   
-  train <- d$train; oracle <- d$train_oracle_label
+  train <- d$train; oracle <- as.logical(d$train_oracle_label)
   zcols <- .cov(train)
   n_tr <- nrow(train)
   
@@ -136,7 +137,8 @@ for (i in seq_along(test_files)) {
       }
       if (is.null(fit)) next
       
-      pred <- tryCatch(pred_subgroup(fit, val), error = function(e) NULL)
+      oracle_val <- as.logical(oracle_val)
+          pred <- tryCatch(pred_subgroup(fit, val), error = function(e) NULL)
       if (!is.null(pred)) fold_aucs[f] <- auc_(pred, oracle_val)
     }
     cv_aucs[K] <- mean(fold_aucs[fold_aucs > 0], na.rm = TRUE)
