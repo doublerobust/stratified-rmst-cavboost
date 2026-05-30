@@ -3,10 +3,11 @@
 #
 # 1. Pulls the moe-integration branch from GitHub
 # 2. Launches the 1,000-rep simulation pipeline (packages must be pre-installed)
-# 3. Pushes results back
+# 3. Monitors progress, checks for errors early
+# 4. Pushes results back
 #
 # Prerequisites (run once in RStudio or RGui):
-#   install.packages(c("mvtnorm","glmnet","survival","xgboost","ranger","moments"),
+#   install.packages(c("mvtnorm","glmnet","survival","xgboost","ranger","dplyr","moments"),
 #                     repos = "https://cloud.r-project.org")
 #
 # Run from Git Bash:
@@ -59,6 +60,20 @@ PID=$!
 echo "Simulation PID: $PID"
 echo "Log: moe/simulation_output.log"
 echo ""
+
+# Wait a few seconds then check for early failure
+sleep 3
+if kill -0 $PID 2>/dev/null; then
+    echo "R process still running after 3s — looks good ✓"
+else
+    echo "R process exited early! Log contents:"
+    echo "----------------------------------------"
+    cat moe/simulation_output.log 2>/dev/null || echo "(log file empty or missing)"
+    echo "----------------------------------------"
+    echo "Check the log above for R error messages."
+    echo "Common issues: missing packages, source() path errors."
+    exit 1
+fi
 
 # Monitor progress
 while kill -0 $PID 2>/dev/null; do
