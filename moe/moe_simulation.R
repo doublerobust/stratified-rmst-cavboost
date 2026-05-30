@@ -50,125 +50,151 @@ auc_ <- function(p, l) {
 process_rep <- function(config_idx, all_configs) {
   cfg <- all_configs[config_idx, ]
 
-  tryCatch({
-    for (rep in seq_len(N_REPS)) {
-      seed <- cfg$seed + rep
+  cat(sprintf("[config %d] starting (family=%s, n_train=%d)\n",
+              config_idx, cfg$family, cfg$n_train))
+  utils::flush.console()
 
-      # Skip if already done
-      result_path <- file.path(RESULTS_DIR, sprintf("rep_%s_%d.rds", cfg$family, seed))
-      if (file.exists(result_path)) next
+  for (rep in seq_len(N_REPS)) {
+    seed <- cfg$seed + rep
 
-      # Generate scenario
-      d <- generate_scenario(
-        family = cfg$family,
-        n_predictive = cfg$n_predictive,
-        n_prognostic = cfg$n_prognostic,
-        overlap = cfg$overlap,
-        b0 = cfg$b0,
-        prognostic_form = cfg$prognostic_form,
-        censoring_rate = cfg$censoring_rate,
-        corr = cfg$corr,
-        n_train = cfg$n_train,
-        n_test = 2000,
-        tau = TAU,
-        seed = seed,
-        save_dir = RAW_DIR
-      )
-
-      if (is.null(d)) next  # invalid scenario
-
-      train <- d$train
-      test <- d$test
-      oracle <- d$oracle_label
-      zcols <- .covariate_cols(train)
-
-      # ---- Fit RMSTBoost for K = 1..5 ----
-      k_values <- 1:5
-      aucs <- setNames(rep(NA_real_, 5), paste0("auc_K", k_values))
-      preds_list <- list()
-
-      for (K in k_values) {
-        if (K == 1L) {
-          fit <- tryCatch(
-            train_rmst_cavboost(train, train$time, train$status, TAU,
-                                eta = 0.05, max_depth = 3, nr = NR),
-            error = function(e) NULL
-          )
-        } else {
-          strata <- tryCatch(
-            crossfit_prognostic_strata(train, zcols, K = K, seed = seed + K),
-            error = function(e) NULL
-          )
-          if (is.null(strata) || length(unique(strata)) < 2) next
-
-          fit <- tryCatch(
-            train_stratified_cavboost(train, train$time, train$status, TAU,
-                                      stratum = strata,
-                                      eta = 0.05, max_depth = 3, nr = NR),
-            error = function(e) NULL
-          )
-        }
-
-        if (!is.null(fit)) {
-          pred <- tryCatch(pred_subgroup(fit, test), error = function(e) NULL)
-          if (!is.null(pred)) {
-            preds_list[[K]] <- pred
-            aucs[K] <- auc_(pred, oracle)
-          }
-        }
-      }
-
-      # ---- Compute gate features from training data ----
-      # Fit base Orig model for internal behavior features
-      fit_orig <- tryCatch(
-        train_rmst_cavboost(train, train$time, train$status, TAU,
-                            eta = 0.05, max_depth = 3, nr = NR),
-        error = function(e) NULL
-      )
-      train_preds <- if (!is.null(fit_orig)) {
-        tryCatch(pred_subgroup(fit_orig, train), error = function(e) NULL)
-      } else NULL
-
-      features <- tryCatch(
-        compute_gate_features(train, tau = TAU, fit_orig = fit_orig, model_preds = train_preds),
-        error = function(e) structure(rep(NA_real_, 30), names = paste0("feat_", 1:30))
-      )
-
-      # Add per-K prediction stats (only if we have predictions)
-      if (length(preds_list) > 0) {
-        for (K in k_values) {
-          if (!is.null(preds_list[[K]])) {
-            pk <- preds_list[[K]]
-            features[paste0("K", K, "_pred_var")] <- var(pk, na.rm = TRUE)
-            features[paste0("K", K, "_pred_mean")] <- mean(pk, na.rm = TRUE)
-            features[paste0("K", K, "_ambiguity")] <- mean(pk > 0.4 & pk < 0.6, na.rm = TRUE)
-          }
-        }
-      }
-
-      # ---- Save result ----
-      result <- list(
-        config_idx = config_idx,
-        config = cfg,
-        rep = rep,
-        seed = seed,
-        aucs = aucs,
-        oracle_optimal_K = if (length(preds_list) > 0) which.max(aucs) else NA_integer_,
-        features = features,
-        oracle_rate = mean(oracle)
-      )
-
-      saveRDS(result, result_path)
+    # Skip if already done
+    result_path <- file.path(RESULTS_DIR, sprintf("rep_%s_%d.rds", cfg$family, seed))
+    if (file.exists(result_path)) {
+      cat(sprintf("[config %d] rep %d skip (exists)\n", config_idx, rep))
+      utils::flush.console()
+      next
     }
-  }, error = function(e) {
-    cat(sprintf("  ERROR in config %d (family=%s, seed=%d): %s\n",
-                config_idx, cfg$family, cfg$seed + 1, e$message))
-  })
 
-  if (config_idx %% 20 == 0) {
-    cat(sprintf("  progress: %d / %d configs\n", config_idx, N_CONFIGS))
+    # Generate scenario
+    cat(sprintf("[config %d] rep %d generate_scenario...\n", config_idx, rep))
+    utils::flush.console()
+    d <- generate_scenario(
+      family = cfg$family,
+      n_predictive = cfg$n_predictive,
+      n_prognostic = cfg$n_prognostic,
+      overlap = cfg$overlap,
+      b0 = cfg$b0,
+      prognostic_form = cfg$prognostic_form,
+      censoring_rate = cfg$censoring_rate,
+      corr = cfg$corr,
+      n_train = cfg$n_train,
+      n_test = 2000,
+      tau = TAU,
+      seed = seed,
+      save_dir = RAW_DIR
+    )
+
+    if (is.null(d)) {
+      cat(sprintf("[config %d] rep %d invalid (null)\n", config_idx, rep))
+      utils::flush.console()
+      next
+    }
+
+    train <- d$train
+    test <- d$test
+    oracle <- d$oracle_label
+    zcols <- .covariate_cols(train)
+
+    # ---- Fit RMSTBoost for K = 1..5 ----
+    k_values <- 1:5
+    aucs <- setNames(rep(NA_real_, 5), paste0("auc_K", k_values))
+    preds_list <- list()
+
+    for (K in k_values) {
+      cat(sprintf("[config %d] rep %d K=%d...\n", config_idx, rep, K))
+      utils::flush.console()
+
+      if (K == 1L) {
+        fit <- tryCatch(
+          train_rmst_cavboost(train, train$time, train$status, TAU,
+                              eta = 0.05, max_depth = 3, nr = NR),
+          error = function(e) NULL
+        )
+      } else {
+        strata <- tryCatch(
+          crossfit_prognostic_strata(train, zcols, K = K, seed = seed + K),
+          error = function(e) NULL
+        )
+        if (is.null(strata) || length(unique(strata)) < 2) {
+          cat(sprintf("[config %d] rep %d K=%d strata invalid\n", config_idx, rep, K))
+          utils::flush.console()
+          next
+        }
+
+        fit <- tryCatch(
+          train_stratified_cavboost(train, train$time, train$status, TAU,
+                                    stratum = strata,
+                                    eta = 0.05, max_depth = 3, nr = NR),
+          error = function(e) NULL
+        )
+      }
+
+      if (!is.null(fit)) {
+        cat(sprintf("[config %d] rep %d K=%d pred_subgroup...\n", config_idx, rep, K))
+        utils::flush.console()
+        pred <- tryCatch(pred_subgroup(fit, test), error = function(e) NULL)
+        if (!is.null(pred)) {
+          preds_list[[K]] <- pred
+          aucs[K] <- auc_(pred, oracle)
+          cat(sprintf("[config %d] rep %d K=%d AUC=%.3f\n", config_idx, rep, K, aucs[K]))
+          utils::flush.console()
+        }
+      }
+    }
+
+    # ---- Compute gate features from training data ----
+    # Fit base Orig model for internal behavior features
+    cat(sprintf("[config %d] rep %d fit_orig...\n", config_idx, rep))
+    utils::flush.console()
+    fit_orig <- tryCatch(
+      train_rmst_cavboost(train, train$time, train$status, TAU,
+                          eta = 0.05, max_depth = 3, nr = NR),
+      error = function(e) NULL
+    )
+    train_preds <- if (!is.null(fit_orig)) {
+      tryCatch(pred_subgroup(fit_orig, train), error = function(e) NULL)
+    } else NULL
+
+    cat(sprintf("[config %d] rep %d compute_gate_features...\n", config_idx, rep))
+    utils::flush.console()
+    features <- tryCatch(
+      compute_gate_features(train, tau = TAU, fit_orig = fit_orig, model_preds = train_preds),
+      error = function(e) structure(rep(NA_real_, 30), names = paste0("feat_", 1:30))
+    )
+
+    # Add per-K prediction stats (only if we have predictions)
+    if (length(preds_list) > 0) {
+      for (K in k_values) {
+        if (!is.null(preds_list[[K]])) {
+          pk <- preds_list[[K]]
+          features[paste0("K", K, "_pred_var")] <- var(pk, na.rm = TRUE)
+          features[paste0("K", K, "_pred_mean")] <- mean(pk, na.rm = TRUE)
+          features[paste0("K", K, "_ambiguity")] <- mean(pk > 0.4 & pk < 0.6, na.rm = TRUE)
+        }
+      }
+    }
+
+    # ---- Save result ----
+    result <- list(
+      config_idx = config_idx,
+      config = cfg,
+      rep = rep,
+      seed = seed,
+      aucs = aucs,
+      oracle_optimal_K = if (length(preds_list) > 0) which.max(aucs) else NA_integer_,
+      features = features,
+      oracle_rate = mean(oracle)
+    )
+
+    cat(sprintf("[config %d] rep %d saveRDS...\n", config_idx, rep))
+    utils::flush.console()
+    saveRDS(result, result_path)
+    cat(sprintf("[config %d] rep %d done\n", config_idx, rep))
+    utils::flush.console()
   }
 
+  cat(sprintf("[config %d] complete\n", config_idx))
+  utils::flush.console()
   invisible(NULL)
 }
 
