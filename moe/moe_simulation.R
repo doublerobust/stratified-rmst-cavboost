@@ -104,22 +104,28 @@ process_rep <- function(config_idx, all_configs) {
     preds_list <- vector("list", 5)
 
     # ---- Compute prognostic score ONCE (cross-fitted elastic-net Cox) ----
-    prog_lp <- tryCatch({
-      n_tr <- nrow(train)
-      x <- data.matrix(train[, zcols, drop = FALSE])
-      y <- survival::Surv(train$time, train$status)
-      set.seed(seed + 999)
-      folds <- sample(rep(1:5, length.out = n_tr))
-      lp <- numeric(n_tr)
-      for (fold in 1:5) {
-        tr_idx <- which(folds != fold); te_idx <- which(folds == fold)
-        cv <- suppressWarnings(glmnet::cv.glmnet(
-          x[tr_idx, , drop = FALSE], y[tr_idx],
-          family = "cox", alpha = 0.5, nfolds = 5, cox.ties = "breslow"))
-        lp[te_idx] <- drop(stats::predict(cv, x[te_idx, , drop = FALSE], s = "lambda.min"))
-      }
-      lp
-    }, error = function(e) NULL)
+    # Retry with different fold splits if glmnet fails (unlucky split at small n)
+    prog_lp <- NULL
+    for (attempt in 1:5) {
+      prog_lp <- tryCatch({
+        n_tr <- nrow(train)
+        x <- data.matrix(train[, zcols, drop = FALSE])
+        y <- survival::Surv(train$time, train$status)
+        set.seed(seed + 999 + attempt * 100)
+        folds <- sample(rep(1:5, length.out = n_tr))
+        lp <- numeric(n_tr)
+        for (fold in 1:5) {
+          tr_idx <- which(folds != fold); te_idx <- which(folds == fold)
+          cv <- suppressWarnings(glmnet::cv.glmnet(
+            x[tr_idx, , drop = FALSE], y[tr_idx],
+            family = "cox", alpha = 0.5, nfolds = 5, 
+            cox.ties = "breslow"))
+          lp[te_idx] <- drop(stats::predict(cv, x[te_idx, , drop = FALSE], s = "lambda.min"))
+        }
+        lp
+      }, error = function(e) NULL)
+      if (!is.null(prog_lp)) break
+    }
 
     for (K in k_values) {
       if (K == 1L) {
