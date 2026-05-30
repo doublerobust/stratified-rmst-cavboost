@@ -15,7 +15,7 @@ set -e
 
 REPO_DIR="$HOME/AIProjects/stratified-RMST-boosting"  # adjust to your local path
 BRANCH="moe-integration"
-RSCRIPT="/c/Program Files/R/R-4.6.0/bin/Rscript.exe"  # adjust to your Windows R location
+RSCRIPT="/c/Progra~1/R/R-4.6.0/bin/Rscript.exe"  # adjust to your Windows R location
 
 echo "=== MoE-K Simulation on Omen ==="
 echo "Time: $(date)"
