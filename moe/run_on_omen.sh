@@ -15,7 +15,7 @@ set -e
 
 REPO_DIR="$HOME/AIProjects/stratified-RMST-boosting"  # adjust to your local path
 BRANCH="moe-integration"
-RSCRIPT="/c/Progra~1/R/R-4.6.0/bin/Rscript.exe"  # adjust to your Windows R location
+RSCRIPT="/c/Program Files/R/R-4.6.0/bin/Rscript.exe"  # adjust to your Windows R location
 
 echo "=== MoE-K Simulation on Omen ==="
 echo "Time: $(date)"
@@ -42,7 +42,7 @@ mkdir -p moe/raw moe/results
 # Step 2: Install any missing R packages
 echo ""
 echo "Checking R packages..."
-$RSCRIPT -e '
+"$RSCRIPT" -e '
 pkgs_ok <- sapply(c("mvtnorm","glmnet","survival","xgboost","ranger","parallel","moments"), 
                     function(p) requireNamespace(p, quietly=TRUE))
 missing <- names(pkgs_ok)[!pkgs_ok]
@@ -64,7 +64,7 @@ echo ""
 cd "$REPO_DIR"
 
 # Run with explicit nr=30 (edit moe_simulation.R to reduce from 50 to 30)
-$RSCRIPT -e '
+"$RSCRIPT" -e '
 N_CONFIGS <<- 1000
 N_REPS <<- 5
 source("moe/moe_simulation.R", local=TRUE)
