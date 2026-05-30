@@ -40,18 +40,16 @@ fi
 # Step 2: Create output dirs
 mkdir -p moe/raw moe/results
 
-# Step 3: Run the simulation (redirect stdout+stderr directly to log)
+# Step 3: Run the simulation via wrapper (no bash redirects — R handles logging via sink())
 echo ""
 echo "=== Starting simulation ==="
 echo "Configs: 1,000, Reps per config: 5, Total: 5,000"
 echo "Boost iterations (nr): 30"
 echo ""
+echo "Log: moe/simulation_output.log"
+echo ""
 
-"$RSCRIPT" -e '
-N_CONFIGS <<- 1000
-N_REPS <<- 5
-source("moe/moe_simulation.R", local=TRUE)
-' > moe/simulation_output.log 2>&1
+"$RSCRIPT" moe/run_simulation.R
 
 EXIT_CODE=$?
 echo ""
