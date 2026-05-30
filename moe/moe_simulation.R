@@ -10,9 +10,9 @@ suppressPackageStartupMessages({
   library(parallel)
 })
 
-# ---- Config ----
-N_CONFIGS <- 1000
-N_REPS <- 5
+# ---- Config (defaults; override via N_CONFIGS <<- before source()) ----
+if (!exists("N_CONFIGS")) N_CONFIGS <- 1000
+if (!exists("N_REPS")) N_REPS <- 5
 N_TOTAL <- N_CONFIGS * N_REPS
 TAU <- 30
 SEED_BASE <- 20260601
@@ -195,6 +195,11 @@ process_rep <- function(config_idx, all_configs) {
 
   cat(sprintf("[config %d] complete\n", config_idx))
   utils::flush.console()
+
+  # Force garbage collection every config to prevent memory exhaustion
+  # (xgboost/ranger can leak on Windows R across many sequential fits)
+  gc()
+
   invisible(NULL)
 }
 
