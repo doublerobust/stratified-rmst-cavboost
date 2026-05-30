@@ -316,7 +316,7 @@ sample_configurations <- function(n_configs = 200) {
                           prob = c(0.1, 0.1, 0.2, 0.3, 0.2, 0.1)),
     overlap = sample(c("none", "partial", "complete"), n_configs, replace = TRUE,
                      prob = c(0.2, 0.5, 0.3)),
-    te_scale = round(runif(n_configs, 0.15, 0.50), 2),
+    te_scale = round(runif(n_configs, 0.25, 0.50), 2),
     b0 = round(runif(n_configs, 0, 2), 2),
     prognostic_form = sample(c("linear", "quadratic", "mixed"), n_configs,
                              replace = TRUE, prob = c(0.4, 0.3, 0.3)),
