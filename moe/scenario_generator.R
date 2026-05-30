@@ -138,6 +138,7 @@ generate_scenario <- function(
     tau = 30,
     corr = "moderate",
     n_vars = 52L,
+    te_scale = 1.0,
     seed = NULL,
     save_dir = NULL,
     ...
@@ -180,6 +181,9 @@ generate_scenario <- function(
   # ---- Treatment effect boundary ----
   te <- BOUNDARY_FUNCTIONS[[family]](X, n_predictive = n_predictive, ...)
   
+  # Scale treatment effect to realistic level
+  te <- te * te_scale
+  
   # ---- Oracle label ----
   oracle_label <- as.logical(te > 0)
   if (length(unique(oracle_label)) < 2L) {
@@ -207,7 +211,7 @@ generate_scenario <- function(
   
   # Prognostic coefficients
   beta_raw <- runif(length(prog_vars), 0.2, 0.6)
-  beta_signs <- ifelse(seq_along(prog_vars) %% 2 == 0, -1, 1)
+  beta_signs <- sample(c(-1, 1), length(prog_vars), replace = TRUE)
   beta_prog <- beta_raw * beta_signs
   
   Zb <- as.numeric(X[, prog_vars, drop = FALSE] %*% beta_prog)
@@ -256,6 +260,7 @@ generate_scenario <- function(
       family = family,
       n_predictive = n_predictive,
       n_prognostic = n_prognostic,
+      te_scale = te_scale,
       overlap = overlap,
       b0 = b0,
       prognostic_form = prognostic_form,
@@ -310,7 +315,8 @@ sample_configurations <- function(n_configs = 200) {
     n_prognostic = sample(c(0, 1, 2, 4, 8, 16), n_configs, replace = TRUE,
                           prob = c(0.1, 0.1, 0.2, 0.3, 0.2, 0.1)),
     overlap = sample(c("none", "partial", "complete"), n_configs, replace = TRUE,
-                     prob = c(0.5, 0.3, 0.2)),
+                     prob = c(0.2, 0.5, 0.3)),
+    te_scale = round(runif(n_configs, 0.15, 0.50), 2),
     b0 = round(runif(n_configs, 0, 2), 2),
     prognostic_form = sample(c("linear", "quadratic", "mixed"), n_configs,
                              replace = TRUE, prob = c(0.4, 0.3, 0.3)),
