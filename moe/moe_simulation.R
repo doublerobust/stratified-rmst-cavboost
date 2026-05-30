@@ -11,12 +11,21 @@ suppressPackageStartupMessages({
 })
 
 # ---- Config ----
-N_CONFIGS <- 1000
-N_REPS <- 5
-N_TOTAL <- N_CONFIGS * N_REPS
-TAU <- 30
-SEED_BASE <- 20260601
-NR <- 30  # boosting iterations (reduced from 50 — sufficient for K ranking)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 REPO_DIR <- "/home/yue-shentu/workspace/stratified-rmst-cavboost"
 MOE_DIR <- file.path(REPO_DIR, "moe")
