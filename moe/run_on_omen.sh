@@ -15,6 +15,7 @@ set -e
 
 REPO_DIR="$HOME/stratified-rmst-cavboost"  # adjust to your WSL path
 BRANCH="moe-integration"
+RSCRIPT="/usr/bin/Rscript"  # adjust to your WSL R location
 
 echo "=== MoE-K Simulation on Omen ==="
 echo "Time: $(date)"
@@ -41,7 +42,7 @@ mkdir -p moe/raw moe/results
 # Step 2: Install any missing R packages
 echo ""
 echo "Checking R packages..."
-Rscript -e '
+$RSCRIPT -e '
 pkgs_ok <- sapply(c("mvtnorm","glmnet","survival","xgboost","ranger","parallel","moments"), 
                     function(p) requireNamespace(p, quietly=TRUE))
 missing <- names(pkgs_ok)[!pkgs_ok]
@@ -63,8 +64,6 @@ echo ""
 cd "$REPO_DIR"
 
 # Run with explicit nr=30 (edit moe_simulation.R to reduce from 50 to 30)
-RSCRIPT="/usr/bin/Rscript"  # or wherever R is on your WSL
-
 $RSCRIPT -e '
 N_CONFIGS <<- 1000
 N_REPS <<- 5
