@@ -324,7 +324,8 @@ crossfit_prognostic_strata <- function(dat, features,
 # 7. Training
 # =========================================================================
 train_stratified_cavboost <- function(dat, time, status, tau, stratum,
-                                       eta = 0.05, max_depth = 4, nr = 50) {
+                                       eta = 0.05, max_depth = 4, nr = 50,
+                                       nthread = 1L) {
   if ("A" %in% names(dat) && !("trt01p" %in% names(dat))) dat$trt01p <- dat$A
   if ("U" %in% names(dat) && !("time" %in% names(dat))) time <- dat$U
   if ("delta_tilde" %in% names(dat) && !("status" %in% names(dat))) status <- dat$delta_tilde
@@ -348,7 +349,8 @@ train_stratified_cavboost <- function(dat, time, status, tau, stratum,
   attr(dtrain, "stratum") <- stratum
   
   params <- list(eta = eta, max_depth = max_depth, lambda = 1,
-                 min_child_weight = 0, subsample = 1, colsample_bytree = 1)
+                 min_child_weight = 0, subsample = 1, colsample_bytree = 1,
+                 nthread = nthread)
   
   xgb.train(params = params, data = dtrain, nrounds = nr,
              objective = stratified_loss, verbose = 0)

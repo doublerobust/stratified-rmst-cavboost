@@ -115,13 +115,15 @@ rmst_cavboost_eval <- function(preds, dtrain) {
   list(metric = "OTR_error", value = if (is.na(err) || is.infinite(err)) 1e10 else err)
 }
 train_rmst_cavboost <- function(dat, time, status, tau,
-                                 eta = 0.05, max_depth = 4, nr = 50, covars = NULL) {
+                                 eta = 0.05, max_depth = 4, nr = 50, covars = NULL,
+                                 nthread = 1L) {
   sorted_data <- make_sorted_data(time, status, dat$trt01p, tau)
   Xmat <- as.matrix(select(dat, -trt01p, -time, -status))
   dtrain <- xgb.DMatrix(Xmat, label = dat$trt01p)
   attr(dtrain, "sorted_data") <- sorted_data
   xgb.train(params = list(eta = eta, max_depth = max_depth, lambda = 1,
-                           min_child_weight = 0, subsample = 1, colsample_bytree = 1),
+                           min_child_weight = 0, subsample = 1, colsample_bytree = 1,
+                           nthread = nthread),
             data = dtrain, nrounds = nr,
             objective = rmst_cavboost_loss, custom_metric = rmst_cavboost_eval, verbose = 0)
 }
