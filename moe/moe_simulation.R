@@ -32,6 +32,12 @@ RESULTS_DIR <- file.path(MOE_DIR, "results")
 dir.create(RAW_DIR, showWarnings = FALSE, recursive = TRUE)
 dir.create(RESULTS_DIR, showWarnings = FALSE, recursive = TRUE)
 
+# ---- Source project files (top-level: needed for sample_configurations, etc.) ----
+source(file.path(MOE_DIR, "scenario_generator.R"))
+source(file.path(MOE_DIR, "gate_features.R"))
+source(file.path(REPO_DIR, "R", "stratified_cavboost.R"))
+source(file.path(REPO_DIR, "R", "rmst_cavboost_clean.R"))
+
 # ---- Process one rep ----
 process_rep <- function(config_idx, all_configs, moe_dir, repo_dir,
                          raw_dir, results_dir, tau, nr, nthread) {
@@ -240,12 +246,6 @@ if (PARALLEL && N_CONFIGS >= 10) {
 } else {
   cat("Processing sequentially...\n\n")
   utils::flush.console()
-
-  # Source project files locally
-  source(file.path(MOE_DIR, "scenario_generator.R"))
-  source(file.path(MOE_DIR, "gate_features.R"))
-  source(file.path(REPO_DIR, "R", "stratified_cavboost.R"))
-  source(file.path(REPO_DIR, "R", "rmst_cavboost_clean.R"))
 
   lapply(seq_len(N_CONFIGS), process_rep,
          all_configs = configs,
