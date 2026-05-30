@@ -70,11 +70,11 @@ if (length(files_all) == 0) {
   quit(status = 1)
 }
 
-# Match test set rows to files (same order)
-# Gate training data was built from files in order
-test_files_idx <- which(seq_len(n) %in% which(seq_len(n) %in% setdiff(seq_len(n), idx)))
-# Simpler: just use the test idx directly
-test_files <- files_all[-idx]
+# Build expected file paths from test data family + seed (robust matching)
+d_test <- d[-idx, ]
+test_files <- file.path("moe/results",
+  paste0("rep_", d_test$family, "_", d_test$seed, ".rds"))
+test_files <- test_files[file.exists(test_files)]
 
 cat(sprintf("  Test files: %d\n", length(test_files)))
 

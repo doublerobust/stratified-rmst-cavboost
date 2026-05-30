@@ -18,7 +18,7 @@ FEATURES <- c("c_index","score_skew","score_kurt","score_var","score_q90_q10",
 rows <- list()
 for (f in files) {
   r <- readRDS(f)
-  row <- list(
+  row <- list(seed = r$seed,
     family = r$config$family,
     n_train = r$config$n_train,
     optimal_K = r$oracle_optimal_K,
