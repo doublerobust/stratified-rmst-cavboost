@@ -116,6 +116,7 @@ BOUNDARY_FUNCTIONS <- list(
 #' @param corr Covariate correlation: "low" (0.1), "moderate" (1/3), "high" (0.7)
 #' @param n_vars Total number of covariates (default 52)
 #' @param seed Random seed
+#' @param save_dir If non-NULL, save the full output as RDS at save_dir/family_seed.rds
 #' @param ... Additional arguments passed to boundary functions
 #'
 #' @return List with train, test, oracle_label, true_te, metadata, or NULL if invalid
@@ -138,6 +139,7 @@ generate_scenario <- function(
     corr = "moderate",
     n_vars = 52L,
     seed = NULL,
+    save_dir = NULL,
     ...
 ) {
   if (!is.null(seed)) set.seed(seed)
@@ -245,7 +247,7 @@ generate_scenario <- function(
   test$time <- U[test_idx]
   test$status <- status[test_idx]
   
-  list(
+  result <- list(
     train = train,
     test = test,
     oracle_label = oracle_label[test_idx],
@@ -266,6 +268,15 @@ generate_scenario <- function(
       beta_prog = beta_prog
     )
   )
+  
+  # Save raw data if requested
+  if (!is.null(save_dir)) {
+    dir.create(save_dir, showWarnings = FALSE, recursive = TRUE)
+    save_path <- file.path(save_dir, sprintf("%s_%d.rds", family, seed))
+    saveRDS(result, save_path)
+  }
+  
+  result
 }
 
 # =========================================================================

@@ -194,11 +194,27 @@ Which 5–15 features does LASSO retain?
 
 This becomes the interpretability result in the paper.
 
+## Data Storage
+
+Each simulation rep is saved as a full RDS file (~0.9–1.2 MB depending
+on sample size).  For 1,000 reps, this is approximately 1.2 GB total.
+
+Files stored at `moe/raw/<family>_<seed>.rds` contain:
+- `train`: training data (covariates + trt + time + status)
+- `test`: test data (covariates + trt + time + status)
+- `oracle_label`: TRUE/FALSE for each test patient (treatment benefit)
+- `true_te`: true treatment effect on log-hazard scale
+- `metadata`: all scenario parameters
+
+This allows recomputing features, fitting new models, or running
+additional analyses without re-running the simulation generator.
+
 ## Expected Deliverables
-1. Parametric scenario sampler (R)
-2. Gate feature extraction pipeline (R)
-3. Trained LASSO gate (coefficient vector, ~5–15 non-zero)
-4. Validation report:
+1. Parametric scenario sampler (R) ✓
+2. Gate feature extraction pipeline (R) — computes ~40 summary stats from training data
+3. Full simulation loop (R) — generates data, fits K=1..5, extracts features, records oracle AUC
+4. Trained LASSO gate (coefficient vector, ~5–15 non-zero)
+5. Validation report:
    - AUC(adaptive K) vs AUC(fixed K=4) vs AUC(CV) vs AUC(oracle)
    - Performance stratified by n
    - Cross-boundary generalization results
