@@ -98,7 +98,8 @@ process_rep <- function(config_idx, all_configs) {
     # ---- Fit RMSTBoost for K = 1..5 ----
     k_values <- 1:5
     aucs <- setNames(rep(NA_real_, 5), paste0("auc_K", k_values))
-    preds_list <- list()
+    # Pre-allocate with 5 elements so preds_list[[K]] always works
+    preds_list <- vector("list", 5)
 
     for (K in k_values) {
       cat(sprintf("[config %d] rep %d K=%d...\n", config_idx, rep, K))
