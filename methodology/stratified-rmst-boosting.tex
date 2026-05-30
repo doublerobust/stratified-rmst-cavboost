@@ -26,7 +26,7 @@
   \textbf{Stratified RMST Boosting for Subgroup Identification}\\[4pt]
   \large Augmenting the Value Function with Prognostic Strata}
 \author{Yue Shentu \& Natasha}
-\date{May 29, 2026\\[6pt]\\small Full simulation results}
+\date{May 30, 2026\newline\small Full simulation results (500 reps)}
 
 \begin{document}
 \maketitle
@@ -298,61 +298,60 @@ $N_{\text{test}} = 2000$, $\tau = 30$, and Setting~2 prognostic strength
 using all 52 covariates, so the within-stratum gradient computation uses
 out-of-fold predictions and avoids training-set overlap.
 
-Results from 300 Monte Carlo reps (standard errors in parentheses):
+Results from 500 Monte Carlo reps (200 agent server, 300 Omen):
 
 \begin{center}
-\begin{tabular}{lcccccc}
+\begin{tabular}{lcccc}
 \toprule
- & & \multicolumn{3}{c}{Hold-out AUC (SE)} & & \% Correct$^a$ \\
-\cmidrule{3-5}
-Scenario (boundary) & Orig & \textbf{StratCF} & VT & Gain & StratCF \\
+\multicolumn{5}{c}{Hold-out AUC (SE)} \\
+\cmidrule{2-5}
+Scenario (boundary) & Orig & \textbf{StratCF} & VT & Gain \\
 \midrule
-S1: Linear ($S_1 > 0$) & 0.791 (0.004) & \textbf{0.974} (0.001) & 0.873 (0.002) & +0.184 & 100\%\\
-S2: Diff ($S_1 - S_2 > 0$) & 0.793 (0.003) & \textbf{0.942} (0.001) & 0.758 (0.002) & +0.150 & 100\%\\
-S3: U-shaped ($S_1$) & 0.906 (0.003) & \textbf{0.987} (0.001) & 0.867 (0.002) & +0.081 & 100\%\\
-S4: Enclave ($S_1 \times S_2$) & \textbf{0.893} (0.002) & 0.813 (0.003) & 0.960 (0.001) & $-$0.080 & 70\%\\
-S5: S-shaped ($S_1$, disjoint) & \textbf{0.952} (0.002) & 0.946 (0.003) & 0.786 (0.002) & $-$0.006 & 72\%\\
-S6: Cross ($S_1 \times S_2$) & 0.928 (0.004) & \textbf{0.944} (0.005) & 0.780 (0.004) & +0.017 & 80\%\\
+S1: Linear ($S_1 > 0$) & 0.790 (0.003) & \textbf{0.974} (0.001) & 0.872 (0.002) & +0.185 \\
+S2: Diff ($S_1 - S_2 > 0$) & 0.793 (0.002) & \textbf{0.943} (0.001) & 0.760 (0.001) & +0.150 \\
+S3: U-shaped ($S_1$) & 0.905 (0.002) & \textbf{0.987} (0.001) & 0.867 (0.002) & +0.082 \\
+S4: Enclave ($S_1 \times S_2$) & \textbf{0.888} (0.002) & 0.805 (0.002) & 0.960 (0.001) & $-$0.083 \\
+S5: S-shaped ($S_1$, disjoint) & \textbf{0.951} (0.002) & 0.947 (0.002) & 0.786 (0.002) & $-$0.005 \\
+S6: Cross ($S_1 \times S_2$) & 0.921 (0.003) & \textbf{0.936} (0.004) & 0.775 (0.004) & +0.015 \\
 \midrule
-\emph{Average} & 0.877 & \textbf{0.934} & 0.838 & +0.058 & 87\%\\
+\emph{Average} & 0.875 & \textbf{0.932} & 0.837 & +0.057 \\
 \bottomrule
 \end{tabular}
-\footnotesize $^a$\% Correct = proportion of reps where StratCF AUC $> 0.5$ (non-inverted).
+\footnotesize Combined results from 500 reps per scenario (200 agent server, 300 Omen).
 \end{center}
 
 %
 
 \begin{center}
-\begin{tabular}{lcccccc}
+\begin{tabular}{lccccccccc}
 \toprule
- & \multicolumn{2}{c}{Original RMSTBoost} & \multicolumn{2}{c}{\textbf{Stratified CF}} & \multicolumn{2}{c}{Virtual Twin} \\
-\cmidrule{2-3}\cmidrule{4-5}\cmidrule{6-7}
-Scenario & Sens & Spec & Sens & Spec & Sens & Spec \\
+ & \multicolumn{3}{c}{Original RMSTBoost} & \multicolumn{3}{c}{\textbf{StratCF}} & \multicolumn{3}{c}{Virtual Twin} \\
+\cmidrule{2-4}\cmidrule{5-7}\cmidrule{8-10}
+Scenario & Acc & Sens & Spec & Acc & Sens & Spec & Acc & Sens & Spec \\
 \midrule
-S1: Linear & 0.771 & 0.674 & \textbf{0.921} & \textbf{0.913} & 0.818 & 0.815 \\
-S2: Diff & 0.760 & 0.678 & \textbf{0.882} & \textbf{0.830} & 0.708 & 0.709 \\
-S3: U-shaped & 0.906 & 0.740 & \textbf{0.987} & \textbf{0.919} & 0.807 & 0.806 \\
-S4: Enclave & 0.967 & 0.618 & 0.973 & 0.513 & \textbf{0.938} & \textbf{0.873} \\
-S5: S-shaped & \textbf{0.927} & 0.852 & 0.932 & 0.833 & 0.745 & 0.733 \\
-S6: Cross & 0.898 & 0.813 & \textbf{0.951} & \textbf{0.859} & 0.741 & 0.733 \\
+S1: Linear & 0.722 & 0.771 & 0.674 & \textbf{0.917} & \textbf{0.921} & \textbf{0.913} & 0.781 & 0.678 & 0.885 \\
+S2: Diff & 0.719 & 0.760 & 0.677 & \textbf{0.856} & \textbf{0.882} & \textbf{0.830} & 0.689 & 0.604 & 0.774 \\
+S3: U-shaped & 0.822 & 0.906 & 0.740 & \textbf{0.953} & \textbf{0.987} & \textbf{0.919} & 0.789 & 0.748 & 0.829 \\
+S4: Enclave & 0.802 & \textbf{0.967} & 0.618 & 0.755 & 0.973 & 0.513 & \textbf{0.891} & 0.909 & \textbf{0.870} \\
+S5: S-shaped & \textbf{0.889} & 0.927 & \textbf{0.852} & 0.882 & \textbf{0.932} & 0.833 & 0.716 & 0.773 & 0.659 \\
+S6: Cross & 0.861 & 0.897 & 0.811 & \textbf{0.912} & \textbf{0.950} & \textbf{0.859} & 0.706 & 0.768 & 0.620 \\
 \bottomrule
 \end{tabular}
-\footnotesize Optimal cutpoint $p = 0.5$.  Combined results from 500 reps per scenario (200 agent server, 300 Omen), except S6 (448 reps).
+\footnotesize Optimal cutpoint $p = 0.5$. Combined results from 500 reps per scenario (200 agent server, 300 Omen).
 \end{center}
 
 The key findings are:
 
 \begin{itemize}
   \item \textbf{Stratified RMSTBoost dominates on additive and monotone
-        boundaries} (S1--S3, gains of 8--18 AUC points).  The cross-fitted
+        boundaries} (S1--S3, gains of 8--19 AUC points).  The cross-fitted
         elastic net prognostic score absorbs the strong prognostic effects
         of $Z_1$--$Z_4$ and aligns with the smooth treatment-effect
         surface.  Within homogeneous strata, the gradient sees a nearly
-        clean signal, producing near-perfect AUC values on S1 (0.974) and
-        S3 (0.987).
+        clean signal, producing near-perfect AUC values on S1 (0.974) and S3 (0.987).
 
   \item \textbf{Stratification is detrimental on disjoint interaction
-        boundaries} (S4 Enclave: StratCF 0.813 vs.\ Orig 0.893).  The
+        boundaries} (S4 Enclave: StratCF 0.805 vs.\ Orig 0.888).  The
         Enclave boundary is a disconnected rectangular region in
         $S_1 \times S_2$ space.  A linear Cox PH prognostic score cannot
         capture this structure, so the strata misalign with the true
@@ -361,15 +360,12 @@ The key findings are:
         survival forest naturally finds the interaction.
 
   \item \textbf{On complex but connected boundaries} (S5 S-shaped, S6
-        Cross), the stratified method is approximately neutral (S5: $-$0.006,
-        S6: $+$0.017).  The prognostic score partly captures the structure
+        Cross), the stratified method is approximately neutral (S5: $-$0.005,
+        S6: $+$0.015).  The prognostic score partly captures the structure
         but not cleanly enough to produce a large gain.
 
   \item \textbf{The stratified method never collapses}.  Across all six
-        scenarios, the worst-case loss relative to the original is 8 AUC
-        points (S4).  In no scenario does it fall below 0.81, and the
-        proportion of correctly directed predictions (AUC $> 0.5$) is
-        70--100\% across scenarios.
+        scenarios, the worst-case loss relative to the original is 8.3 AUC points (S4).  In no scenario does it fall below 0.80, and over 99\% of reps produce correctly directed predictions across all scenarios.
 
   \item \textbf{Original RMSTBoost is robust} (0.79--0.95 AUC), making it a
         reliable all-purpose baseline.  It wins scenario S5 outright and
