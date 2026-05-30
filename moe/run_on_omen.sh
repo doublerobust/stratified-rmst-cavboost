@@ -60,45 +60,27 @@ for i in $(seq 1 $N_WORKERS); do
     END=1000
   else
     END=$((i * CONFIGS_PER_WORKER))
-  fi
-  LOG_SUFFIX=$i
-  
-  echo "  Worker $i: configs $START..$END -> log simulation_output_${LOG_SUFFIX}.log"
-  
-  "$RSCRIPT" moe/run_simulation.R $START $END --log=$LOG_SUFFIX &
+  fi  
+  echo "  Worker $i: configs $START..$END -> log simulation_output_${i}.log"
+  "$RSCRIPT" moe/run_simulation.R $START $END --log=$i &
   PIDS="$PIDS $!"
 done
 
 echo ""
 echo "All $N_WORKERS workers launched. Monitoring..."
 
-# Monitor: check every 30s how many workers are still running
 while true; do
   RUNNING=""
   for pid in $PIDS; do
-    if kill -0 $pid 2>/dev/null; then
-      RUNNING="$RUNNING $pid"
-    fi
+    kill -0 $pid 2>/dev/null && RUNNING="$RUNNING $pid"
   done
-  
   RUNNING_COUNT=$(echo $RUNNING | wc -w | tr -d ' ')
-  if [ "$RUNNING_COUNT" -eq 0 ]; then
-    break
-  fi
-  
-  echo "[$(date)] $RUNNING_COUNT / $N_WORKERS workers still running"
-  
-  # Show latest line from each worker's log
-  for i in $(seq 1 $N_WORKERS); do
+  [ "$RUNNING_COUNT" -eq 0 ] && break
+  echo "[$(date)] $RUNNING_COUNT / $N_WORKERS workers running"
+  for i in 1 2 3 4 5 6 7 8 9 10 11; do
     LOG="moe/simulation_output_${i}.log"
-    if [ -f "$LOG" ]; then
-      LAST=$(tail -1 "$LOG" 2>/dev/null)
-      if [ -n "$LAST" ]; then
-        echo "  Worker $i: $LAST"
-      fi
-    fi
+    [ -f "$LOG" ] && tail -1 "$LOG" 2>/dev/null | head -c 200
   done
-  
   sleep 30
 done
 
