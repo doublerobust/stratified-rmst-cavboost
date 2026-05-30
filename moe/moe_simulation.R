@@ -8,6 +8,8 @@
 
 suppressPackageStartupMessages({
   library(parallel)
+  library(survival)
+  library(glmnet)
 })
 
 # ---- Config (defaults; override via N_CONFIGS <<- before source()) ----
@@ -101,49 +103,59 @@ process_rep <- function(config_idx, all_configs) {
     # Pre-allocate with 5 elements so preds_list[[K]] always works
     preds_list <- vector("list", 5)
 
-    for (K in k_values) {
-      cat(sprintf("[config %d] rep %d K=%d...\n", config_idx, rep, K))
-      utils::flush.console()
+    # ---- Compute prognostic score ONCE (cross-fitted elastic-net Cox) ----
+    prog_lp <- tryCatch({
+      n_tr <- nrow(train)
+      x <- data.matrix(train[, zcols, drop = FALSE])
+      y <- survival::Surv(train$time, train$status)
+      set.seed(seed + 999)
+      folds <- sample(rep(1:5, length.out = n_tr))
+      lp <- numeric(n_tr)
+      for (fold in 1:5) {
+        tr_idx <- which(folds != fold); te_idx <- which(folds == fold)
+        cv <- suppressWarnings(glmnet::cv.glmnet(
+          x[tr_idx, , drop = FALSE], y[tr_idx],
+          family = "cox", alpha = 0.5, nfolds = 5, cox.ties = "breslow"))
+        lp[te_idx] <- drop(stats::predict(cv, x[te_idx, , drop = FALSE], s = "lambda.min"))
+      }
+      lp
+    }, error = function(e) NULL)
 
+    for (K in k_values) {
       if (K == 1L) {
         fit <- tryCatch(
           train_rmst_cavboost(train, train$time, train$status, TAU,
                               eta = 0.05, max_depth = 3, nr = NR),
           error = function(e) NULL
         )
-      } else {
-        strata <- tryCatch(
-          crossfit_prognostic_strata(train, zcols, K = K, seed = seed + K),
-          error = function(e) NULL
-        )
-        if (is.null(strata) || length(unique(strata)) < 2) {
-          cat(sprintf("[config %d] rep %d K=%d strata invalid\n", config_idx, rep, K))
-          utils::flush.console()
-          next
+      } else if (!is.null(prog_lp)) {
+        qq <- unique(stats::quantile(prog_lp, seq(0, 1, 1 / K), na.rm = TRUE))
+        if (length(qq) >= 2) {
+          strata <- as.numeric(cut(prog_lp, qq, include.lowest = TRUE, right = TRUE))
+          fit <- tryCatch(
+            train_stratified_cavboost(train, train$time, train$status, TAU,
+                                      stratum = strata,
+                                      eta = 0.05, max_depth = 3, nr = NR),
+            error = function(e) NULL
+          )
+        } else {
+          fit <- NULL
         }
-
-        fit <- tryCatch(
-          train_stratified_cavboost(train, train$time, train$status, TAU,
-                                    stratum = strata,
-                                    eta = 0.05, max_depth = 3, nr = NR),
-          error = function(e) NULL
-        )
+      } else {
+        fit <- NULL
       }
 
       if (!is.null(fit)) {
-        cat(sprintf("[config %d] rep %d K=%d pred_subgroup...\n", config_idx, rep, K))
-        utils::flush.console()
         pred <- tryCatch(pred_subgroup(fit, test), error = function(e) NULL)
         if (!is.null(pred)) {
           preds_list[[K]] <- pred
           aucs[K] <- auc_(pred, oracle)
-          cat(sprintf("[config %d] rep %d K=%d AUC=%.3f\n", config_idx, rep, K, aucs[K]))
-          utils::flush.console()
         }
       }
     }
 
     # ---- Compute gate features from training data ----
+
     # Fit base Orig model for internal behavior features
     cat(sprintf("[config %d] rep %d fit_orig...\n", config_idx, rep))
     utils::flush.console()
