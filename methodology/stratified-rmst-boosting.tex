@@ -22,7 +22,7 @@
 \newcommand{\Prm}[1]{\widetilde{#1}}
 \newcommand{\sgn}{\operatorname{sgn}}
 
-\title{\vspace{-1.5cm}%
+\title{%
   \textbf{Stratified RMST Boosting for Subgroup Identification}\\[4pt]
   \large Augmenting the Value Function with Prognostic Strata}
 \author{Yue Shentu \& Natasha}
@@ -38,7 +38,7 @@
 % ======================================================================
 
 This document defines a stratified version of RMST-based subgroup boosting
-(``RMST CAVBoost'').  The original method learns a soft subgroup
+(``RMST RMSTBoost'').  The original method learns a soft subgroup
 assignment $p_i \in [0,1]$ (the probability that patient $i$ belongs to the
 treatment-preferring subgroup) by optimizing a value function through
 gradient boosting trees.  The proposed refinement replaces the original
@@ -118,7 +118,7 @@ altering the learned $p_i$.
 
 \subsection{Value Function}
 
-The stratified value function mirrors the original CAVBoost structure
+The stratified value function mirrors the original RMSTBoost structure
 exactly, but applied within each stratum.  Recall that the original
 value function is:
 \[
@@ -162,7 +162,7 @@ $N$ is applied, matching the scale convention of the original.
 
 \subsection{Analytic Gradient}
 
-The gradient mirrors the original CAVBoost derivation.  For patient $j$
+The gradient mirrors the original RMSTBoost derivation.  For patient $j$
 in stratum $k$, taking the derivative of each term in $V_{\text{strat}}$
 with respect to $\eta_j = \log(p_j/(1-p_j))$:
 
@@ -194,7 +194,7 @@ The terms $\partial d_k^{(1)}/\partial p_j$ and
 $\partial d_k^{(2)}/\partial p_j$ are the derivatives of the
 within-stratum $p$-weighted and $(1-p)$-weighted RMST differences with
 respect to patient $j$'s subgroup probability.  They are computed by the
-same influence-function machinery as the original CAVBoost (the
+same influence-function machinery as the original RMSTBoost (the
 $\text{hazard\_inc}$ function in the R code), evaluated on the events
 within stratum $k$ only.  The per-stratum computation is $K$ times
 faster than the full-sample version because each stratum has roughly
@@ -210,7 +210,7 @@ on the fact that the prognostic score $s_i$ (used to define strata) is a
 function of $\bm{Z}_i$.
 
 \paragraph{Connection to the original.}
-The original CAVBoost gradient (from \texttt{rmst\_cavboost\_clean.R}) is:
+The original RMSTBoost gradient (from \texttt{rmst\_cavboost\_clean.R}) is:
 \[
 g_j^{\text{(orig)}} = -p_j(1-p_j)\Big[
 \widehat\Delta^{(1)} + \Bigl(\sum_i p_i\Bigr)\frac{\partial
@@ -238,7 +238,7 @@ sample.
 
 \subsection{Implementation}
 
-The algorithm mirrors the original CAVBoost, but the KM and influence
+The algorithm mirrors the original RMSTBoost, but the KM and influence
 computations loop over strata:
 \begin{enumerate}
   \item Pre-compute cross-fitted prognostic score $\widehat{s}_i$ via
@@ -267,7 +267,7 @@ computations loop over strata:
   \item After training: $\widehat G_i = \ind{p_i > 0.5}$.
 \end{enumerate}
 
-This is a direct adaptation of the original CAVBoost gradient, replacing
+This is a direct adaptation of the original RMSTBoost gradient, replacing
 the global weighted~KM with per-stratum weighted~KM.  The R functions
 from \texttt{rmst\_cavboost\_clean.R}---in particular the hazard
 increment and sorted-data machinery---are reused without modification;
@@ -283,7 +283,7 @@ only the loop structure changes.
 
 All classification metrics are computed on a held-out test set of 2000
 patients (separate from the 500 training patients).  Three methods are
-compared: original CAVBoost, stratified CAVBoost ($K=4$, cross-fitted
+compared: original RMSTBoost, stratified RMSTBoost ($K=4$, cross-fitted
 elastic net Cox prognostic score), and virtual twin (separate survival
 random forests via ranger, 200 trees, min node size~10, RMST difference
 via trapezoidal integration).
@@ -303,7 +303,7 @@ Results from 300 Monte Carlo reps (standard errors in parentheses):
 \begin{center}
 \begin{tabular}{lcccccc}
 \toprule
- & & \multicolumn{3}{c}{Hold-out AUC (SE)} & & \% Correct Dir. \\
+ & & \multicolumn{3}{c}{Hold-out AUC (SE)} & & \% Correct$^a$ \\
 \cmidrule{3-5}
 Scenario (boundary) & Orig & \textbf{StratCF} & VT & Gain & StratCF \\
 \midrule
@@ -317,12 +317,33 @@ S6: Cross ($S_1 \times S_2$) & 0.928 (0.004) & \textbf{0.944} (0.005) & 0.780 (0
 \emph{Average} & 0.877 & \textbf{0.934} & 0.838 & +0.058 & 87\%\\
 \bottomrule
 \end{tabular}
+\footnotesize $^a$\% Correct = proportion of reps where StratCF AUC $> 0.5$ (non-inverted).
+\end{center}
+
+%
+
+\begin{center}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{2}{c}{Original RMSTBoost} & \multicolumn{2}{c}{\textbf{Stratified CF}} & \multicolumn{2}{c}{Virtual Twin} \\
+\cmidrule{2-3}\cmidrule{4-5}\cmidrule{6-7}
+Scenario & Sens & Spec & Sens & Spec & Sens & Spec \\
+\midrule
+S1: Linear & 0.771 & 0.674 & \textbf{0.921} & \textbf{0.913} & 0.818 & 0.815 \\
+S2: Diff & 0.760 & 0.678 & \textbf{0.882} & \textbf{0.830} & 0.708 & 0.709 \\
+S3: U-shaped & 0.906 & 0.740 & \textbf{0.987} & \textbf{0.919} & 0.807 & 0.806 \\
+S4: Enclave & 0.967 & 0.618 & 0.973 & 0.513 & \textbf{0.938} & \textbf{0.873} \\
+S5: S-shaped & \textbf{0.927} & 0.852 & 0.932 & 0.833 & 0.745 & 0.733 \\
+S6: Cross & 0.898 & 0.813 & \textbf{0.951} & \textbf{0.859} & 0.741 & 0.733 \\
+\bottomrule
+\end{tabular}
+\footnotesize Optimal cutpoint $p = 0.5$.  Combined results from 500 reps per scenario (200 agent server, 300 Omen), except S6 (448 reps).
 \end{center}
 
 The key findings are:
 
 \begin{itemize}
-  \item \textbf{Stratified CAVBoost dominates on additive and monotone
+  \item \textbf{Stratified RMSTBoost dominates on additive and monotone
         boundaries} (S1--S3, gains of 8--18 AUC points).  The cross-fitted
         elastic net prognostic score absorbs the strong prognostic effects
         of $Z_1$--$Z_4$ and aligns with the smooth treatment-effect
@@ -350,7 +371,7 @@ The key findings are:
         proportion of correctly directed predictions (AUC $> 0.5$) is
         70--100\% across scenarios.
 
-  \item \textbf{Original CAVBoost is robust} (0.79--0.95 AUC), making it a
+  \item \textbf{Original RMSTBoost is robust} (0.79--0.95 AUC), making it a
         reliable all-purpose baseline.  It wins scenario S5 outright and
         ties on S6, demonstrating that the unstratified value function is
         already competitive on complex boundaries.
@@ -372,7 +393,7 @@ scenario for downstream analysis.
 
 \subsection{Practical Implications}
 
-The results suggest a practical rule: \textbf{use stratified CAVBoost
+The results suggest a practical rule: \textbf{use stratified RMSTBoost
 as the default, but check for sensitivity on interaction-dominated
 boundaries}.  When the treatment-effect boundary is smooth relative to
 prognosis (the common case in oncology trials driven by a few strong
@@ -392,7 +413,7 @@ during development.  The implementation includes a runtime assertion
 % ======================================================================
 
 The stratified RMST boosting method presented here offers a simple,
-computationally efficient modification of the original CAVBoost
+computationally efficient modification of the original RMSTBoost
 algorithm.  By computing the value function within prognostic strata,
 the gradient is shielded from prognostic confounding, leading to
 substantial improvements in subgroup identification accuracy on smooth
