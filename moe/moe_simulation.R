@@ -15,7 +15,7 @@ N_CONFIGS <- 200
 N_REPS <- 5
 N_TOTAL <- N_CONFIGS * N_REPS
 TAU <- 30
-SEED_BASE <- 20260530
+SEED_BASE <- 20260601
 NR <- 30  # boosting iterations (reduced from 50 — sufficient for K ranking)
 
 REPO_DIR <- "/home/yue-shentu/workspace/stratified-rmst-cavboost"

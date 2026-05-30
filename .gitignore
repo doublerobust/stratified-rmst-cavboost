@@ -43,6 +43,9 @@ results_csv/
 # Clean runner log
 clean.log
 
+# MoE-K raw simulation data (large RDS files ~1GB total)
+moe/raw/
+
 # Temp
 tmp/
 .Rproj.user/

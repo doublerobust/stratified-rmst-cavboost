@@ -90,7 +90,7 @@ tail -20 moe/simulation_output.log
 # Step 4: Push results back to GitHub
 echo ""
 echo "=== Pushing results ==="
-git add moe/raw/ moe/results/ moe/simulation_output.log
+git add moe/results/ moe/simulation_output.log
 git commit -m "MoE-K simulation results ($(date +%Y-%m-%d))"
 git push origin "$BRANCH"
 
