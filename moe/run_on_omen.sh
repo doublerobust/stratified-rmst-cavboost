@@ -5,17 +5,17 @@
 # 2. Runs the full 1,000-rep simulation pipeline
 # 3. Pushes results back
 #
-# Run from Windows Terminal (as admin, or in R session with system permissions):
-#   wsl bash moe/run_on_omen.sh
+# Run from Git Bash:
+#   cd ~/AIProjects/stratified-RMST-boosting && bash moe/run_on_omen.sh
 #
 # Or from RStudio directly:
 #   source("moe/run_on_omen.R")
 
 set -e
 
-REPO_DIR="$HOME/stratified-rmst-cavboost"  # adjust to your WSL path
+REPO_DIR="$HOME/AIProjects/stratified-RMST-boosting"  # adjust to your local path
 BRANCH="moe-integration"
-RSCRIPT="/usr/bin/Rscript"  # adjust to your WSL R location
+RSCRIPT="/c/Program Files/R/R-4.6.0/bin/Rscript.exe"  # adjust to your Windows R location
 
 echo "=== MoE-K Simulation on Omen ==="
 echo "Time: $(date)"
