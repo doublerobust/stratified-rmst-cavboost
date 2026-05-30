@@ -16,6 +16,7 @@ N_REPS <- 5
 N_TOTAL <- N_CONFIGS * N_REPS
 TAU <- 30
 SEED_BASE <- 20260530
+NR <- 30  # boosting iterations (reduced from 50 — sufficient for K ranking)
 
 REPO_DIR <- "/home/yue-shentu/workspace/stratified-rmst-cavboost"
 MOE_DIR <- file.path(REPO_DIR, "moe")
@@ -88,7 +89,7 @@ process_rep <- function(config_idx, all_configs) {
       if (K == 1L) {
         fit <- tryCatch(
           train_rmst_cavboost(train, train$time, train$status, TAU,
-                              eta = 0.05, max_depth = 3, nr = 50),
+                              eta = 0.05, max_depth = 3, nr = NR),
           error = function(e) NULL
         )
       } else {
@@ -101,7 +102,7 @@ process_rep <- function(config_idx, all_configs) {
         fit <- tryCatch(
           train_stratified_cavboost(train, train$time, train$status, TAU,
                                     stratum = strata,
-                                    eta = 0.05, max_depth = 3, nr = 50),
+                                    eta = 0.05, max_depth = 3, nr = NR),
           error = function(e) NULL
         )
       }
@@ -119,7 +120,7 @@ process_rep <- function(config_idx, all_configs) {
     # Fit base Orig model for internal behavior features
     fit_orig <- tryCatch(
       train_rmst_cavboost(train, train$time, train$status, TAU,
-                          eta = 0.05, max_depth = 3, nr = 50),
+                          eta = 0.05, max_depth = 3, nr = NR),
       error = function(e) NULL
     )
     train_preds <- if (!is.null(fit_orig)) {
