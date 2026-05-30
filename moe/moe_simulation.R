@@ -11,23 +11,15 @@ suppressPackageStartupMessages({
 })
 
 # ---- Config ----
+N_CONFIGS <- 1000
+N_REPS <- 5
+N_TOTAL <- N_CONFIGS * N_REPS
+TAU <- 30
+SEED_BASE <- 20260601
+NR <- 30  # boosting iterations (reduced from 50 — sufficient for K ranking)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-REPO_DIR <- "/home/yue-shentu/workspace/stratified-rmst-cavboost"
+# Use the directory containing this script as the base
+REPO_DIR <- getwd()
 MOE_DIR <- file.path(REPO_DIR, "moe")
 RAW_DIR <- file.path(MOE_DIR, "raw")
 RESULTS_DIR <- file.path(MOE_DIR, "results")
@@ -57,14 +49,14 @@ auc_ <- function(p, l) {
 # ---- Process one rep ----
 process_rep <- function(config_idx, all_configs) {
   cfg <- all_configs[config_idx, ]
-  
+
   for (rep in seq_len(N_REPS)) {
     seed <- cfg$seed + rep
-    
+
     # Skip if already done
     result_path <- file.path(RESULTS_DIR, sprintf("rep_%s_%d.rds", cfg$family, seed))
     if (file.exists(result_path)) next
-    
+
     # Generate scenario
     d <- generate_scenario(
       family = cfg$family,
@@ -81,19 +73,19 @@ process_rep <- function(config_idx, all_configs) {
       seed = seed,
       save_dir = RAW_DIR
     )
-    
+
     if (is.null(d)) next  # invalid scenario
-    
+
     train <- d$train
     test <- d$test
     oracle <- d$oracle_label
     zcols <- .covariate_cols(train)
-    
+
     # ---- Fit RMSTBoost for K = 1..5 ----
     k_values <- 1:5
     aucs <- setNames(rep(NA_real_, 5), paste0("auc_K", k_values))
     preds_list <- list()
-    
+
     for (K in k_values) {
       if (K == 1L) {
         fit <- tryCatch(
@@ -107,7 +99,7 @@ process_rep <- function(config_idx, all_configs) {
           error = function(e) NULL
         )
         if (is.null(strata) || length(unique(strata)) < 2) next
-        
+
         fit <- tryCatch(
           train_stratified_cavboost(train, train$time, train$status, TAU,
                                     stratum = strata,
@@ -115,7 +107,7 @@ process_rep <- function(config_idx, all_configs) {
           error = function(e) NULL
         )
       }
-      
+
       if (!is.null(fit)) {
         pred <- tryCatch(pred_subgroup(fit, test), error = function(e) NULL)
         if (!is.null(pred)) {
@@ -124,7 +116,7 @@ process_rep <- function(config_idx, all_configs) {
         }
       }
     }
-    
+
     # ---- Compute gate features from training data ----
     # Fit base Orig model for internal behavior features
     fit_orig <- tryCatch(
@@ -135,12 +127,12 @@ process_rep <- function(config_idx, all_configs) {
     train_preds <- if (!is.null(fit_orig)) {
       tryCatch(pred_subgroup(fit_orig, train), error = function(e) NULL)
     } else NULL
-    
+
     features <- tryCatch(
       compute_gate_features(train, tau = TAU, fit_orig = fit_orig, model_preds = train_preds),
       error = function(e) structure(rep(NA_real_, 30), names = paste0("feat_", 1:30))
     )
-    
+
     # Add per-K prediction stats (from test set predictions)
     for (K in k_values) {
       if (!is.null(preds_list[[K]])) {
@@ -150,7 +142,7 @@ process_rep <- function(config_idx, all_configs) {
         features[paste0("K", K, "_ambiguity")] <- mean(pk > 0.4 & pk < 0.6, na.rm = TRUE)
       }
     }
-    
+
     # ---- Save result ----
     result <- list(
       config_idx = config_idx,
@@ -162,14 +154,14 @@ process_rep <- function(config_idx, all_configs) {
       features = features,
       oracle_rate = mean(oracle)
     )
-    
+
     saveRDS(result, result_path)
   }
-  
+
   if (config_idx %% 20 == 0) {
     cat(sprintf("  progress: %d / %d configs\n", config_idx, N_CONFIGS))
   }
-  
+
   invisible(NULL)
 }
 
@@ -189,12 +181,10 @@ cat(sprintf("Train sample size distribution:\n"))
 print(table(configs$n_train))
 cat("\n")
 
-n_cores <- detectCores() - 1
-cat(sprintf("Processing with %d cores...\n\n", n_cores))
+cat(sprintf("Processing sequentially (Windows compatibility)...\n\n"))
 
-results <- mclapply(seq_len(N_CONFIGS), process_rep,
-                    all_configs = configs,
-                    mc.cores = n_cores, mc.preschedule = FALSE)
+results <- lapply(seq_len(N_CONFIGS), process_rep,
+                  all_configs = configs)
 
 cat("\n=== Simulation Complete ===\n")
 
@@ -214,28 +204,28 @@ if (length(result_files) > 0) {
       stringsAsFactors = FALSE
     )
   })
-  
+
   summary_df <- do.call(rbind, summary_list)
-  
+
   cat("\nOptimal K distribution (overall):\n")
   print(table(summary_df$oracle_optimal_K))
-  
+
   cat("\nOptimal K by family:\n")
   tbl <- table(summary_df$family, summary_df$oracle_optimal_K)
   tbl_prop <- prop.table(tbl, 1)
   print(round(tbl_prop * 100, 1))
-  
+
   cat("\nOptimal K by n_train:\n")
   tbl_n <- table(summary_df$n_train, summary_df$oracle_optimal_K)
   tbl_n_prop <- prop.table(tbl_n, 1)
   print(round(tbl_n_prop * 100, 1))
-  
+
   # AUC improvement vs K=4
   summary_df$auc_improvement <- summary_df$auc_K4 - apply(summary_df[, paste0("auc_K", 1:5)], 1, max, na.rm = TRUE)
   cat(sprintf("\nAUC loss from using K=4 vs optimal: mean = %.4f, median = %.4f\n",
               mean(abs(summary_df$auc_improvement), na.rm = TRUE),
               median(abs(summary_df$auc_improvement), na.rm = TRUE)))
-  
+
   write.csv(summary_df, file.path(RESULTS_DIR, "summary.csv"), row.names = FALSE)
   cat("Summary saved to:", file.path(RESULTS_DIR, "summary.csv"), "\n")
 }

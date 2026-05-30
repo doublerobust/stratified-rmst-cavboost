@@ -47,6 +47,8 @@ echo "Configs: 1,000, Reps per config: 5, Total: 5,000"
 echo "Boost iterations (nr): 30"
 echo ""
 
+cd "$REPO_DIR"
+
 "$RSCRIPT" -e '
 N_CONFIGS <<- 1000
 N_REPS <<- 5
