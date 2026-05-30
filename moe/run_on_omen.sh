@@ -40,7 +40,7 @@ fi
 # Step 2: Create output dirs
 mkdir -p moe/raw moe/results
 
-# Step 3: Run the simulation (foreground, tee to log)
+# Step 3: Run the simulation (redirect stdout+stderr directly to log)
 echo ""
 echo "=== Starting simulation ==="
 echo "Configs: 1,000, Reps per config: 5, Total: 5,000"
@@ -51,13 +51,15 @@ echo ""
 N_CONFIGS <<- 1000
 N_REPS <<- 5
 source("moe/moe_simulation.R", local=TRUE)
-' 2>&1 | tee moe/simulation_output.log
+' > moe/simulation_output.log 2>&1
 
-EXIT_CODE=${PIPESTATUS[0]}
+EXIT_CODE=$?
 echo ""
 echo "R process exited with code: $EXIT_CODE"
 
 if [ $EXIT_CODE -ne 0 ]; then
+    echo ""
+    cat moe/simulation_output.log 2>/dev/null | tail -50
     echo ""
     echo "=== ERROR: R script failed with exit code $EXIT_CODE ==="
     exit $EXIT_CODE
