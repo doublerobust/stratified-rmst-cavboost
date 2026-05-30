@@ -255,6 +255,7 @@ generate_scenario <- function(
     train = train,
     test = test,
     oracle_label = oracle_label[test_idx],
+    train_oracle_label = oracle_label[train_idx],
     true_te = te[test_idx],
     metadata = list(
       family = family,

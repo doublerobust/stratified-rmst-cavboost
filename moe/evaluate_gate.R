@@ -13,20 +13,19 @@
 
 library(glmnet)
 library(data.table)
+library(survival)
 
 source("moe/scenario_generator.R")
 source("R/stratified_cavboost.R")
 source("R/rmst_cavboost_clean.R")
 
 TAU <- 30
-NR <- 30  # Use same as main simulation
+NR <- 30
 .cov <- function(d) setdiff(names(d), c("trt01p","time","status","A","U","delta_tilde"))
 
 auc_ <- function(p, l) {
-  ok <- !is.na(p) & !is.na(l)
-  p <- p[ok]; l <- l[ok]
   npos <- sum(l); nneg <- sum(!l)
-  if (isTRUE(npos < 1) || isTRUE(nneg < 1)) return(NA)
+  if (npos < 1 || nneg < 1) return(NA)
   r <- rank(p)
   (sum(r[as.logical(l)]) - npos * (npos + 1) / 2) / (npos * nneg)
 }
@@ -61,18 +60,14 @@ gate_K <- apply(probs, 1, which.max)
 
 # ---- Real 5-fold CV on test set ----
 cat(sprintf("Running real 5-fold CV on %d test reps...\n", length(y_te)))
-cat("(This will take a while — Omen is fast)\n\n")
+cat("(This will take a while)\n\n")
 
-# Read test data configs from the test indices
-# We need the original RDS files to regenerate data
 files_all <- list.files("moe/results", "rep_.*\\.rds$", full.names = TRUE)
 if (length(files_all) == 0) {
   cat("ERROR: No RDS files found in moe/results/\n")
-  cat("The RDS files are needed to get configs for CV data regeneration.\n")
   quit(status = 1)
 }
 
-# Build expected file paths from test data family + seed (robust matching)
 d_test <- d[-idx, ]
 test_files <- file.path("moe/results",
   paste0("rep_", d_test$family, "_", d_test$seed, ".rds"))
@@ -80,42 +75,52 @@ test_files <- test_files[file.exists(test_files)]
 
 cat(sprintf("  Test files: %d\n", length(test_files)))
 
+if (length(test_files) == 0) {
+  cat("ERROR: gate_training_data.csv has no 'seed' column — re-run extract_gate_data.R\n")
+  quit(status = 1)
+}
+
 results <- data.frame()
 for (i in seq_along(test_files)) {
   r <- readRDS(test_files[i])
   cfg <- r$config; seed <- r$seed
-  
-  # Regenerate data (true oracle labels)
-  d <- generate_scenario(family = cfg$family,
+
+  # Regenerate data (true oracle labels for CV)
+  d_gen <- generate_scenario(family = cfg$family,
     n_predictive = cfg$n_predictive, n_prognostic = cfg$n_prognostic,
+    te_scale = cfg$te_scale,
     overlap = cfg$overlap, b0 = cfg$b0,
     prognostic_form = cfg$prognostic_form,
     censoring_rate = cfg$censoring_rate,
     corr = cfg$corr, n_train = cfg$n_train, n_test = 2000,
     tau = TAU, seed = seed + 100)
-  if (is.null(d)) next
-  if (is.null(d)) next
-  
-  train <- d$train; oracle <- as.logical(d$train_oracle_label)
+  if (is.null(d_gen)) next
+
+  train <- d_gen$train
+  oracle <- as.logical(d_gen$train_oracle_label)
+  if (all(oracle) || !any(oracle)) next  # degenerate fold
   zcols <- .cov(train)
   n_tr <- nrow(train)
-  
+
   # 5-fold CV
+  set.seed(seed + 200)
   folds <- sample(rep(1:5, length.out = n_tr))
   cv_aucs <- numeric(5)
-  
+
   for (K in 1:5) {
     fold_aucs <- numeric(5)
     for (f in 1:5) {
-      tr <- train[folds != f,]; val <- train[folds == f,]
+      tr <- train[folds != f,]
+      val <- train[folds == f,]
       oracle_val <- oracle[folds == f]
       
+      if (sum(oracle_val) < 2 || sum(!oracle_val) < 2) next
+
       if (K == 1L) {
         fit <- tryCatch(train_rmst_cavboost(tr, tr$time, tr$status, TAU,
                           eta = 0.05, max_depth = 3, nr = NR),
                         error = function(e) NULL)
       } else {
-        # Compute prognostic score on training fold
         x_fold <- data.matrix(tr[, zcols, drop = FALSE])
         y_fold <- Surv(tr$time, tr$status)
         qq <- tryCatch({
@@ -138,20 +143,19 @@ for (i in seq_along(test_files)) {
                         error = function(e) NULL)
       }
       if (is.null(fit)) next
-      
-      oracle_val <- as.logical(oracle_val)
-          pred <- tryCatch(pred_subgroup(fit, val), error = function(e) NULL)
+
+      pred <- tryCatch(pred_subgroup(fit, val), error = function(e) NULL)
       if (!is.null(pred)) fold_aucs[f] <- auc_(pred, oracle_val)
     }
     cv_aucs[K] <- mean(fold_aucs[fold_aucs > 0], na.rm = TRUE)
   }
-  
+
   # Get the actual test AUCs from the saved result
   test_aucs <- r$aucs
   oracle_opt <- r$oracle_optimal_K
   cv_K_opt <- which.max(cv_aucs)
   gate_K_val <- gate_K[i]
-  
+
   results <- rbind(results, data.frame(
     family = cfg$family, n_train = cfg$n_train,
     oracle_auc = test_aucs[oracle_opt],
@@ -162,7 +166,7 @@ for (i in seq_along(test_files)) {
     gate_K = gate_K_val,
     cv_K = cv_K_opt
   ))
-  
+
   if (i %% 20 == 0) cat(sprintf("  %d/%d test reps done\n", i, length(test_files)))
 }
 
