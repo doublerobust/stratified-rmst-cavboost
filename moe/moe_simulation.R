@@ -11,7 +11,7 @@ suppressPackageStartupMessages({
 })
 
 # ---- Config ----
-N_CONFIGS <- 200
+N_CONFIGS <- 1000
 N_REPS <- 5
 N_TOTAL <- N_CONFIGS * N_REPS
 TAU <- 30

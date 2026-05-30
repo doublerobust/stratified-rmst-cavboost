@@ -56,7 +56,7 @@ if (length(missing) > 0) {
 # Step 3: Run the simulation
 echo ""
 echo "=== Starting simulation ==="
-echo "Configs: 200, Reps per config: 5, Total: 1,000"
+echo "Configs: 1,000, Reps per config: 5, Total: 5,000"
 echo "Boost iterations (nr): 30"
 echo ""
 
@@ -66,7 +66,7 @@ cd "$REPO_DIR"
 RSCRIPT="/usr/bin/Rscript"  # or wherever R is on your WSL
 
 $RSCRIPT -e '
-N_CONFIGS <<- 200
+N_CONFIGS <<- 1000
 N_REPS <<- 5
 source("moe/moe_simulation.R", local=TRUE)
 ' > moe/simulation_output.log 2>&1 &
