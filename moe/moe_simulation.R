@@ -283,6 +283,21 @@ if (length(result_files) > 0) {
               mean(abs(summary_df$auc_improvement), na.rm = TRUE),
               median(abs(summary_df$auc_improvement), na.rm = TRUE)))
 
+  # Flag near-perfect AUCs for diagnostic
+  perfect <- apply(summary_df[, paste0("auc_K", 1:5)] > 0.999, 1, any, na.rm = TRUE)
+  n_perfect <- sum(perfect, na.rm = TRUE)
+  if (n_perfect > 0) {
+    cat(sprintf("\n⚠️  %d / %d reps have AUC > 0.999 (near-perfect prediction)\n",
+                n_perfect, nrow(summary_df)))
+    perfect_df <- summary_df[perfect, ]
+    cat("\nBy family:\n")
+    print(table(perfect_df$family))
+    cat("\nBy n_train:\n")
+    print(table(perfect_df$n_train))
+  } else {
+    cat("\nNo near-perfect AUCs detected.\n")
+  }
+
   write.csv(summary_df, file.path(RESULTS_DIR, "summary.csv"), row.names = FALSE)
   cat("Summary saved to:", file.path(RESULTS_DIR, "summary.csv"), "\n")
 }
