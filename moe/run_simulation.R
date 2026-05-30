@@ -17,9 +17,12 @@ cat("\n")
 
 N_CONFIGS <- 1000
 N_REPS <- 5
+N_WORKERS <- 1
+PARALLEL <- FALSE
 
 cat(sprintf("N_CONFIGS: %d\n", N_CONFIGS))
 cat(sprintf("N_REPS: %d\n", N_REPS))
+cat(sprintf("Mode: sequential (PSOCK not supported on R 4.6.0 Windows)\n"))
 cat("\n")
 
 # Source the main simulation

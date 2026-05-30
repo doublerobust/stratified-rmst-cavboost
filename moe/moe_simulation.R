@@ -16,12 +16,12 @@ suppressPackageStartupMessages({
 if (!exists("N_CONFIGS")) N_CONFIGS <- 1000
 if (!exists("N_REPS")) N_REPS <- 5
 if (!exists("N_WORKERS")) N_WORKERS <- 11
+if (!exists("PARALLEL")) PARALLEL <- TRUE
 N_TOTAL <- N_CONFIGS * N_REPS
 TAU <- 30
 SEED_BASE <- 20260601
 NR <- 30  # boosting iterations
 NTHREAD <- 2  # XGBoost threads per worker (N_WORKERS * NTHREAD <= total cores)
-PARALLEL <- TRUE
 
 # Use the directory containing this script as the base
 REPO_DIR <- getwd()
