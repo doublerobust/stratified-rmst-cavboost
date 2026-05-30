@@ -39,19 +39,15 @@ fi
 # Step 1: Create output dirs
 mkdir -p moe/raw moe/results
 
-# Step 2: Install any missing R packages
+# Step 2: Install required R packages (install.packages is idempotent)
 echo ""
-echo "Checking R packages..."
+echo "Installing R packages..."
 "$RSCRIPT" -e '
-pkgs_ok <- sapply(c("mvtnorm","glmnet","survival","xgboost","ranger","parallel","moments"), 
-                    function(p) requireNamespace(p, quietly=TRUE))
-missing <- names(pkgs_ok)[!pkgs_ok]
-if (length(missing) > 0) {
-  cat("Installing missing packages:", missing, "\n")
-  install.packages(missing, repos="https://cloud.r-project.org")
-} else {
-  cat("All packages found ✅\n")
-}
+install.packages(
+  c("mvtnorm","glmnet","survival","xgboost","ranger","moments"),
+  repos = "https://cloud.r-project.org"
+)
+cat("Packages installed/confirmed ✅\n")
 '
 
 # Step 3: Run the simulation
