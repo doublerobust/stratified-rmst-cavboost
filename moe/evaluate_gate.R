@@ -26,7 +26,7 @@ auc_ <- function(p, l) {
   ok <- !is.na(p) & !is.na(l)
   p <- p[ok]; l <- l[ok]
   npos <- sum(l); nneg <- sum(!l)
-  if (npos < 1 || nneg < 1) return(NA)
+  if (isTRUE(npos < 1) || isTRUE(nneg < 1)) return(NA)
   r <- rank(p)
   (sum(r[as.logical(l)]) - npos * (npos + 1) / 2) / (npos * nneg)
 }
