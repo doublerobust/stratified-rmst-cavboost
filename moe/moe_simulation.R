@@ -222,41 +222,27 @@ cat(sprintf("Train sample size distribution:\n"))
 print(table(configs$n_train))
 cat("\n")
 
-if (PARALLEL && N_CONFIGS >= 10) {
-  cat(sprintf("Starting parallel processing with %d workers...\n\n", N_WORKERS))
-  utils::flush.console()
-
-  cl <- makePSOCKcluster(N_WORKERS, outfile = "")
-
-  # Export variables needed by workers
-  clusterExport(cl, c("N_REPS"), envir = environment())
-
-  # Process in parallel
-  parLapply(cl, seq_len(N_CONFIGS), process_rep,
-            all_configs = configs,
-            moe_dir = MOE_DIR,
-            repo_dir = REPO_DIR,
-            raw_dir = RAW_DIR,
-            results_dir = RESULTS_DIR,
-            tau = TAU,
-            nr = NR,
-            nthread = NTHREAD)
-
-  stopCluster(cl)
+# Determine config range (used for multi-process: each process handles a slice)
+config_indices <- seq_len(N_CONFIGS)
+if (exists("CONFIG_START") && !is.na(CONFIG_START) &&
+    exists("CONFIG_END") && !is.na(CONFIG_END)) {
+  config_indices <- config_indices[config_indices >= CONFIG_START & config_indices <= CONFIG_END]
+  cat(sprintf("Processing configs %d .. %d (%d configs)\n\n",
+              CONFIG_START, CONFIG_END, length(config_indices)))
 } else {
-  cat("Processing sequentially...\n\n")
-  utils::flush.console()
-
-  lapply(seq_len(N_CONFIGS), process_rep,
-         all_configs = configs,
-         moe_dir = MOE_DIR,
-         repo_dir = REPO_DIR,
-         raw_dir = RAW_DIR,
-         results_dir = RESULTS_DIR,
-         tau = TAU,
-         nr = NR,
-         nthread = 1L)
+  cat(sprintf("Processing all %d configs sequentially\n\n", N_CONFIGS))
 }
+utils::flush.console()
+
+lapply(config_indices, process_rep,
+       all_configs = configs,
+       moe_dir = MOE_DIR,
+       repo_dir = REPO_DIR,
+       raw_dir = RAW_DIR,
+       results_dir = RESULTS_DIR,
+       tau = TAU,
+       nr = NR,
+       nthread = 1L)
 
 cat("\n=== Simulation Complete ===\n")
 
