@@ -18,7 +18,9 @@ import subprocess
 import sys
 import time
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = subprocess.check_output(
+    ["git", "rev-parse", "--show-toplevel"], text=True
+).strip()
 SCRIPT = os.path.join(REPO, "moe", "moe_simulation.R")
 LOG_DIR = os.path.join(REPO, "moe", "results", "logs")
 
@@ -50,7 +52,7 @@ def run_chunk(chunk_idx: int, start: int, end: int, configs: int,
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, f"sim_chunk_{chunk_idx}.log")
     log_fh = open(log_file, "w")
-    
+
     r_code = (
         f"N_CONFIGS <- {configs}; "
         f"N_REPS <- {reps}; "
@@ -59,10 +61,10 @@ def run_chunk(chunk_idx: int, start: int, end: int, configs: int,
         f"CONFIG_END <- {end}; "
         f"source('{SCRIPT}')"
     )
-    
+
     log_fh.write(f"=== Chunk {chunk_idx}: configs {start}-{end} ===\n")
     log_fh.flush()
-    
+
     proc = subprocess.Popen(
         ["Rscript", "-e", r_code],
         cwd=REPO,
@@ -74,16 +76,16 @@ def run_chunk(chunk_idx: int, start: int, end: int, configs: int,
 
 def main():
     args = parse_args()
-    
+
     if args.merge_only:
         print(f"Result files in {os.path.join(REPO, 'moe', 'results')}:")
         os.system(f"ls {os.path.join(REPO, 'moe', 'results', 'rep_*.rds')} 2>/dev/null | wc -l")
         return
-    
+
     n_chunks = min(args.cores, args.configs)
     chunk_size = args.configs // n_chunks
     remainder = args.configs % n_chunks
-    
+
     # Build chunk ranges (1-indexed, inclusive)
     chunks = []
     ptr = 1
@@ -92,32 +94,32 @@ def main():
         csize = chunk_size + extra
         chunks.append((ptr, ptr + csize - 1))
         ptr += csize
-    
+
     total = args.configs * args.reps
-    print(f"🚀 MoE Simulation: {args.configs} configs × {args.reps} reps = {total} total")
+    print(f"MoE Simulation: {args.configs} configs x {args.reps} reps = {total} total")
     print(f"   Cores: {n_chunks}  Chunk size: ~{chunk_size} configs each")
     print(f"   CWD:   {REPO}")
     print()
-    
+
     # Preview
     print(f"{'Chunk':>6}  {'Configs':>10}  {'Est. time':>10}")
     print("-" * 30)
     for i, (s, e) in enumerate(chunks):
         print(f"{i+1:>6}  {s:>5}-{e:<5}  ~{((e-s+1)*args.reps*8)//60:>3}m")
     print()
-    
+
     if args.dry_run:
         return
-    
+
     # Optional clean
     if args.clean:
-        print("🧹 Cleaning old RDS and raw files...")
+        print("Cleaning old RDS and raw files...")
         for d in ["moe/results", "moe/raw"]:
             for f in os.listdir(os.path.join(REPO, d)):
                 if f.endswith(".rds"):
                     os.remove(os.path.join(REPO, d, f))
         print("   Done.\n")
-    
+
     # Launch all chunks
     t0 = time.time()
     procs = []
@@ -125,7 +127,7 @@ def main():
         p = run_chunk(i, s, e, args.configs, args.reps, n_chunks, LOG_DIR)
         procs.append(p)
         print(f"  Launched chunk {i+1}/{n_chunks} (PID {p.pid})")
-    
+
     # Monitor progress
     done = [False] * n_chunks
     while not all(done):
@@ -139,15 +141,15 @@ def main():
                     print(f"  [{elapsed:6.1f}s] Chunk {i+1}/{n_chunks}: {status}")
         if not all(done):
             time.sleep(10)
-    
+
     total_time = time.time() - t0
-    print(f"\n⏱  All chunks done in {total_time:.0f}s ({total_time/60:.1f}m)")
-    
+    print(f"\nAll chunks done in {total_time:.0f}s ({total_time/60:.1f}m)")
+
     # Count results
     res_dir = os.path.join(REPO, "moe", "results")
     n_files = len([f for f in os.listdir(res_dir) if f.startswith("rep_") and f.endswith(".rds")])
-    print(f"📦 Result files: {n_files} / {total}")
-    print(f"📝 Logs: {LOG_DIR}/sim_chunk_*.log")
+    print(f"Result files: {n_files} / {total}")
+    print(f"Logs: {LOG_DIR}/sim_chunk_*.log")
     print(f"\nNext steps:")
     print(f"  Rscript moe/extract_gate_data.R")
     print(f"  Rscript moe/evaluate_gate.R")

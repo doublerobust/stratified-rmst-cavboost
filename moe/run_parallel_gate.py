@@ -66,7 +66,7 @@ def main():
     args = parser.parse_args()
 
     n_chunks = args.cores
-    print(f"🚀 Gate evaluation: {n_chunks} parallel chunks")
+    print(f"Gate evaluation: {n_chunks} parallel chunks")
     print(f"   Script: {SCRIPT}")
     print(f"   CWD:    {REPO}")
     print()
@@ -112,18 +112,18 @@ def main():
             time.sleep(5)
 
     total_time = time.time() - t0
-    print(f"\n⏱  All chunks done in {total_time:.0f}s ({total_time/60:.1f}m)")
+    print(f"\nAll chunks done in {total_time:.0f}s ({total_time/60:.1f}m)")
 
     # Merge results
-    print("\n📦 Merging chunk results...")
+    print("\nMerging chunk results...")
     merged = merge_results(n_chunks)
     if merged:
-        print(f"✅ Final results: {merged}")
+        print(f"Final results: {merged}")
     else:
-        print("❌ Merge failed — check logs in {log_dir}/")
+        print(f"Merge failed -- check logs in {log_dir}/")
 
     # Print log locations
-    print(f"\n📝 Logs: {log_dir}/chunk_*.log")
+    print(f"\nLogs: {log_dir}/chunk_*.log")
 
 
 if __name__ == "__main__":
