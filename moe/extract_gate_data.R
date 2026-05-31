@@ -33,7 +33,8 @@ NEW_FEATURES <- c("c_index_trt", "c_index_ctrl", "c_index_ratio",
 rows <- list()
 for (f in files) {
   r <- readRDS(f)
-  row <- list(seed = r$seed,
+  row <- list(config_idx = r$config_idx,
+    seed = r$seed,
     family = r$config$family,
     n_train = r$config$n_train,
     optimal_method = if (!is.null(r$oracle_optimal_method)) r$oracle_optimal_method
@@ -75,6 +76,38 @@ for (f in files) {
 }
 
 df <- rbindlist(rows, fill = TRUE)
+
+# ---- Aggregate by config_idx: average AUCs + features, pick oracle ----
+if ("config_idx" %in% names(df)) {
+  cat(sprintf("Aggregating %d rows by config_idx...\n", nrow(df)))
+  
+  # Columns to average (numeric, one per rep)
+  auc_cols <- c("auc_K1", "auc_K2", "auc_K3", "auc_K4", "auc_K5", "auc_VT")
+  feat_cols <- setdiff(names(df), c("config_idx", "seed", "family", "n_train",
+    "optimal_method", auc_cols, "cfg_prognostic_form", "cfg_te_start", "cfg_te_peak", "cfg_te_decay"))
+  
+  # Average numeric columns per config
+  agg <- df[, lapply(.SD, mean, na.rm = TRUE),
+            by = config_idx,
+            .SDcols = c(auc_cols, feat_cols)]
+  
+  # Add back non-numeric config-level columns (take first within config)
+  first_cols <- c("family", "n_train", "cfg_prognostic_form")
+  first_cols <- intersect(first_cols, names(df))
+  first_vals <- unique(df[, c("config_idx", first_cols), with = FALSE])
+  agg <- merge(agg, first_vals, by = "config_idx")
+  
+  # Oracle method = which has highest mean AUC
+  auc_mat <- as.matrix(agg[, ..auc_cols])
+  agg$optimal_method <- max.col(auc_mat, ties.method = "first")
+  
+  # Drop config_idx from final output
+  agg[, config_idx := NULL]
+  
+  cat(sprintf("Aggregated to %d configs\n", nrow(agg)))
+  df <- agg
+}
+
 fwrite(df, file.path(RD, "gate_training_data.csv"))
 cat(sprintf("Written: %d rows x %d cols to moe/results/gate_training_data.csv\n", nrow(df), ncol(df)))
 cat("Columns:", paste(names(df), collapse=", "), "\n")
