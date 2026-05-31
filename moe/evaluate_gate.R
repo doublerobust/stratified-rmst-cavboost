@@ -74,19 +74,6 @@ gate_K <- apply(probs, 1, which.max)
 cat(sprintf("Running real 5-fold CV on %d test reps...\n", length(y_te)))
 cat("(This will take a while)\n\n")
 
-# ---- Parallel chunking ----
-if (n_chunks > 1L) {
-  chunk_size <- ceiling(length(test_files) / n_chunks)
-  chunk_start <- chunk_idx * chunk_size + 1L
-  chunk_end <- min((chunk_idx + 1L) * chunk_size, length(test_files))
-  idx_chunk <- chunk_start:chunk_end
-  test_files <- test_files[idx_chunk]
-  d_test <- d_test[idx_chunk, , drop = FALSE]
-  gate_K <- gate_K[idx_chunk]
-  cat(sprintf("Chunk %d: files %d to %d (%d total)\n",
-      chunk_idx + 1L, chunk_start, chunk_end, length(test_files)))
-}
-
 files_all <- list.files("moe/results", "rep_.*\\.rds$", full.names = TRUE)
 if (length(files_all) == 0) {
   cat("ERROR: No RDS files found in moe/results/\n")
@@ -99,6 +86,19 @@ test_files <- file.path("moe/results",
 test_files <- test_files[file.exists(test_files)]
 
 cat(sprintf("  Test files: %d\n", length(test_files)))
+
+# ---- Parallel chunking ----
+if (n_chunks > 1L) {
+  chunk_size <- ceiling(length(test_files) / n_chunks)
+  chunk_start <- chunk_idx * chunk_size + 1L
+  chunk_end <- min((chunk_idx + 1L) * chunk_size, length(test_files))
+  idx_chunk <- chunk_start:chunk_end
+  test_files <- test_files[idx_chunk]
+  d_test <- d_test[idx_chunk, , drop = FALSE]
+  gate_K <- gate_K[idx_chunk]
+  cat(sprintf("Chunk %d: files %d to %d (%d total)\n",
+      chunk_idx + 1L, chunk_start, chunk_end, length(test_files)))
+}
 
 if (length(test_files) == 0) {
   cat("ERROR: gate_training_data.csv has no 'seed' column — re-run extract_gate_data.R\n")
