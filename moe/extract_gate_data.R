@@ -83,8 +83,12 @@ if ("config_idx" %in% names(df)) {
   
   # Columns to average (numeric, one per rep)
   auc_cols <- c("auc_K1", "auc_K2", "auc_K3", "auc_K4", "auc_K5", "auc_VT")
-  feat_cols <- setdiff(names(df), c("config_idx", "seed", "family", "n_train",
-    "optimal_method", auc_cols, "cfg_prognostic_form", "cfg_te_start", "cfg_te_peak", "cfg_te_decay"))
+  exclude_from_avg <- c("config_idx", "seed", "family", "n_train",
+    "optimal_method", auc_cols, "cfg_prognostic_form", "cfg_te_start", "cfg_te_peak", "cfg_te_decay")
+  feat_cols <- setdiff(names(df), exclude_from_avg)
+  # Only keep numeric columns for averaging
+  is_num <- sapply(df[, ..feat_cols], is.numeric)
+  feat_cols <- feat_cols[is_num]
   
   # Average numeric columns per config
   agg <- df[, lapply(.SD, mean, na.rm = TRUE),
@@ -96,6 +100,13 @@ if ("config_idx" %in% names(df)) {
   first_cols <- intersect(first_cols, names(df))
   first_vals <- unique(df[, c("config_idx", first_cols), with = FALSE])
   agg <- merge(agg, first_vals, by = "config_idx")
+  
+  # Drop configs where all AUCs are NA (can't determine oracle)
+  na_count <- rowSums(is.na(auc_mat))
+  if (any(na_count == ncol(auc_mat))) {
+    cat(sprintf("Dropping %d configs with all NA AUCs\n", sum(na_count == ncol(auc_mat))))
+    agg <- agg[na_count < ncol(auc_mat), ]
+  }
   
   # Oracle method = which has highest mean AUC
   auc_mat <- as.matrix(agg[, ..auc_cols])
