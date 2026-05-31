@@ -22,8 +22,8 @@ FEATURES <- c("c_index","score_skew","score_kurt","score_var","score_q90_q10",
 CONFIG_FEATURES <- c("n_predictive", "n_prognostic", "te_scale", "overlap", "b0",
   "prognostic_form", "corr", "te_start", "te_peak", "te_decay")
 
-# Per-K prediction stats (computed by moe_simulation.R but not extracted)
-K_STATS <- c("pred_var", "pred_mean", "ambiguity")
+# Per-K prediction stats — DROPPED (method byproduct, not true meta-feature)
+# True meta-features must be computable from raw training data alone.
 
 # New features computed from raw training data
 NEW_FEATURES <- c("c_index_trt", "c_index_ctrl", "c_index_ratio",
@@ -49,14 +49,8 @@ for (f in files) {
     v <- r$config[[nm]]
     row[[paste0("cfg_", nm)]] <- if (is.null(v) || length(v) != 1) NA_real_ else v
   }
-  # Per-K prediction stats (K1..K5)
-  for (K in 1:5) {
-    for (stat in K_STATS) {
-      key <- paste0("K", K, "_", stat)
-      v <- r$features[[key]]
-      row[[key]] <- if (is.null(v) || length(v) != 1) NA_real_ else v
-    }
-  }
+  # NOTE: K1..K5 prediction stats skipped intentionally
+  # These are method byproducts (need fitted RMST boosting), not true meta-features
   # New features from raw training data (within-arm, interactions, correlation)
   raw_path <- file.path(RAW, sprintf("%s_%d.rds", r$config$family, r$seed))
   if (file.exists(raw_path)) {

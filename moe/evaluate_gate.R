@@ -50,7 +50,8 @@ d <- fread("moe/results/gate_training_data.csv")
 
 exclude_cols <- c("seed","family","n_train","optimal_K","oracle_rate",
   "auc_K1","auc_K2","auc_K3","auc_K4","auc_K5",
-  "cfg_te_start","cfg_te_peak","cfg_te_decay")
+  "cfg_te_start","cfg_te_peak","cfg_te_decay",
+  grep("^K[1-5]_", names(d), value = TRUE))
 feat_cols <- setdiff(names(d), exclude_cols)
 cat(sprintf("  %d rows, %d features\n", nrow(d), length(feat_cols)))
 
