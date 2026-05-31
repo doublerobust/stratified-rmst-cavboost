@@ -10,6 +10,7 @@ suppressPackageStartupMessages({
   library(parallel)
   library(survival)
   library(glmnet)
+  library(ranger)
 })
 
 # ---- Config (defaults; override via N_CONFIGS <<- before source()) ----
@@ -183,13 +184,52 @@ process_rep <- function(config_idx, all_configs, moe_dir, repo_dir,
       }
     }
 
+    # ---- Fit VT (ranger per arm) ----
+    ctrl <- train[train$trt01p == 0, ]
+    trt_d <- train[train$trt01p == 1, ]
+    vt_auc <- NA_real_
+    vt_preds <- NULL
+    if (nrow(ctrl) >= 20 && nrow(trt_d) >= 20) {
+      zcols_vt <- setdiff(names(train), c("trt01p", "time", "status"))
+      rf_c <- tryCatch(
+        ranger(Surv(time, status) ~ ., data = ctrl[, c("time", "status", zcols_vt)],
+               num.trees = 200, min.node.size = 10, seed = seed + 300),
+        error = function(e) NULL
+      )
+      rf_t <- tryCatch(
+        ranger(Surv(time, status) ~ ., data = trt_d[, c("time", "status", zcols_vt)],
+               num.trees = 200, min.node.size = 10, seed = seed + 301),
+        error = function(e) NULL
+      )
+      if (!is.null(rf_c) && !is.null(rf_t)) {
+        pc <- predict(rf_c, test[, zcols_vt])
+        pt <- predict(rf_t, test[, zcols_vt])
+        # RMST via mean survival on fine grid
+        tg <- seq(0, tau, length.out = 200)
+        surv_grid <- function(surv_mat, times, grid) {
+          apply(surv_mat, 1, function(s) {
+            stats::approx(times, s, grid, rule = 2, yleft = 1)$y
+          })
+        }
+        sc <- surv_grid(pc$survival, pc$unique.death.times, tg)
+        st <- surv_grid(pt$survival, pt$unique.death.times, tg)
+        vt_preds <- colMeans(st) * tau - colMeans(sc) * tau
+        vt_auc <- auc_(vt_preds, oracle)
+      }
+    }
+
+    # ---- Build results ----
+    aucs_all <- c(aucs, vt_auc)
+    names(aucs_all) <- c(paste0("auc_K", k_values), "auc_VT")
+
     result <- list(
       config_idx = config_idx,
       config = cfg,
       rep = rep,
       seed = seed,
-      aucs = aucs,
-      oracle_optimal_K = if (length(preds_list) > 0) which.max(aucs) else NA_integer_,
+      aucs = aucs_all,
+      oracle_optimal_method = which.max(aucs_all),
+      vt_auc = vt_auc,
       features = features,
       oracle_rate = mean(oracle)
     )
@@ -254,39 +294,52 @@ cat(sprintf("Files written: %d / %d\n", length(result_files), N_TOTAL))
 if (length(result_files) > 0) {
   summary_list <- lapply(result_files, function(f) {
     r <- readRDS(f)
+    aucs <- r$aucs
     data.frame(
       family = r$config$family,
       n_train = r$config$n_train,
-      auc_K1 = r$aucs[1], auc_K2 = r$aucs[2], auc_K3 = r$aucs[3],
-      auc_K4 = r$aucs[4], auc_K5 = r$aucs[5],
-      oracle_optimal_K = r$oracle_optimal_K,
+      auc_K1 = if (length(aucs) >= 1) aucs[1] else NA,
+      auc_K2 = if (length(aucs) >= 2) aucs[2] else NA,
+      auc_K3 = if (length(aucs) >= 3) aucs[3] else NA,
+      auc_K4 = if (length(aucs) >= 4) aucs[4] else NA,
+      auc_K5 = if (length(aucs) >= 5) aucs[5] else NA,
+      auc_VT = if (length(aucs) >= 6) aucs[6] else NA,
+      oracle_optimal_method = if (!is.null(r$oracle_optimal_method)) r$oracle_optimal_method
+                          else if (!is.null(r$oracle_optimal_K)) r$oracle_optimal_K else NA,
       stringsAsFactors = FALSE
     )
   })
 
   summary_df <- do.call(rbind, summary_list)
 
-  cat("\nOptimal K distribution (overall):\n")
-  print(table(summary_df$oracle_optimal_K))
+  cat("\nOptimal method distribution (overall):\n")
+  print(table(summary_df$oracle_optimal_method))
 
-  cat("\nOptimal K by family:\n")
-  tbl <- table(summary_df$family, summary_df$oracle_optimal_K)
-  tbl_prop <- prop.table(tbl, 1)
-  print(round(tbl_prop * 100, 1))
+  cat("\nVT wins when? (oracle_optimal_method == 6)\n")
+  vt_wins <- summary_df$oracle_optimal_method == 6
+  cat(sprintf("VT wins: %d / %d (%.1f%%)\n", sum(vt_wins, na.rm = TRUE), nrow(summary_df),
+      100 * mean(vt_wins, na.rm = TRUE)))
 
-  cat("\nOptimal K by n_train:\n")
-  tbl_n <- table(summary_df$n_train, summary_df$oracle_optimal_K)
-  tbl_n_prop <- prop.table(tbl_n, 1)
-  print(round(tbl_n_prop * 100, 1))
+  cat("\nOptimal method by family:\n")
+  method_labels <- c("K1","K2","K3","K4","K5","VT")
+  tbl <- table(summary_df$family, summary_df$oracle_optimal_method)
+  colnames(tbl) <- method_labels[as.numeric(colnames(tbl))]
+  print(round(prop.table(tbl, 1) * 100, 1))
 
-  # AUC improvement vs K=4
-  summary_df$auc_improvement <- summary_df$auc_K4 - apply(summary_df[, paste0("auc_K", 1:5)], 1, max, na.rm = TRUE)
-  cat(sprintf("\nAUC loss from using K=4 vs optimal: mean = %.4f, median = %.4f\n",
-              mean(abs(summary_df$auc_improvement), na.rm = TRUE),
-              median(abs(summary_df$auc_improvement), na.rm = TRUE)))
+  cat("\nOptimal method by n_train:\n")
+  tbl_n <- table(summary_df$n_train, summary_df$oracle_optimal_method)
+  colnames(tbl_n) <- method_labels[as.numeric(colnames(tbl_n))]
+  print(round(prop.table(tbl_n, 1) * 100, 1))
+
+  # VT AUC stats
+  vt_aucs <- summary_df$auc_VT
+  cat(sprintf("\nVT AUC: mean = %.4f, median = %.4f, %% missing = %.1f%%\n",
+      mean(vt_aucs, na.rm = TRUE), median(vt_aucs, na.rm = TRUE),
+      100 * mean(is.na(vt_aucs))))
 
   # Flag near-perfect AUCs for diagnostic
-  perfect <- apply(summary_df[, paste0("auc_K", 1:5)] > 0.999, 1, any, na.rm = TRUE)
+  auc_cols <- grep("^auc_", names(summary_df), value = TRUE)
+  perfect <- apply(summary_df[, auc_cols] > 0.999, 1, any, na.rm = TRUE)
   n_perfect <- sum(perfect, na.rm = TRUE)
   if (n_perfect > 0) {
     cat(sprintf("\n\u26a0\ufe0f  %d / %d reps have AUC > 0.999 (near-perfect prediction)\n",

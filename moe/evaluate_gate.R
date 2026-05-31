@@ -48,8 +48,8 @@ if (length(args) >= 2) {
 cat("Loading gate training data...\n")
 d <- fread("moe/results/gate_training_data.csv")
 
-exclude_cols <- c("seed","family","n_train","optimal_K","oracle_rate",
-  "auc_K1","auc_K2","auc_K3","auc_K4","auc_K5",
+exclude_cols <- c("seed","family","n_train","optimal_K","optimal_method","oracle_rate",
+  "auc_K1","auc_K2","auc_K3","auc_K4","auc_K5","auc_VT",
   "cfg_te_start","cfg_te_peak","cfg_te_decay",
   grep("^K[1-5]_", names(d), value = TRUE))
 feat_cols <- setdiff(names(d), exclude_cols)
@@ -58,7 +58,7 @@ cat(sprintf("  %d rows, %d features\n", nrow(d), length(feat_cols)))
 X <- as.matrix(d[, ..feat_cols])
 for (j in seq_len(ncol(X))) X[is.na(X[,j]), j] <- mean(X[,j], na.rm=TRUE)
 X[!is.finite(X)] <- 0
-y <- d$optimal_K
+y <- d$optimal_method
 
 # ---- Train/test split ----
 set.seed(20260530)
@@ -193,7 +193,8 @@ for (i in seq_along(test_files)) {
 
   # Get the actual test AUCs from the saved result
   test_aucs <- r$aucs
-  oracle_opt <- r$oracle_optimal_K
+  oracle_opt <- if (!is.null(r$oracle_optimal_method)) r$oracle_optimal_method
+                else if (!is.null(r$oracle_optimal_K)) r$oracle_optimal_K else NA_integer_
   cv_K_opt <- if (length(cv_aucs) > 0 && any(!is.na(cv_aucs))) which.max(cv_aucs) else NA_integer_
   gate_K_val <- gate_K[i]
 
@@ -203,8 +204,9 @@ for (i in seq_along(test_files)) {
     gate_auc = if (!is.na(gate_K_val)) test_aucs[gate_K_val] else NA,
     cv_auc = if (!is.na(cv_K_opt)) test_aucs[cv_K_opt] else NA,
     k4_auc = test_aucs[4],
-    oracle_K = oracle_opt,
-    gate_K = gate_K_val,
+    vt_auc = if (length(test_aucs) >= 6) test_aucs[6] else NA,
+    oracle_method = oracle_opt,
+    gate_method = gate_K_val,
     cv_K = cv_K_opt
   ))
 
@@ -226,12 +228,30 @@ cat(sprintf("%-18s %8.4f %8.4f %8.4f\n", "Gate", mean(results$gate_auc, na.rm = 
 cat(sprintf("%-18s %8.4f %8.4f %8.4f\n", "CV (real 5-fold)", mean(results$cv_auc, na.rm = TRUE),
     mean(results$oracle_auc - results$cv_auc, na.rm = TRUE),
     max(results$oracle_auc - results$cv_auc, na.rm = TRUE)))
+cat(sprintf("%-18s %8.4f %8.4f %8.4f\n", "VT (always)", mean(results$vt_auc, na.rm = TRUE),
+    mean(results$oracle_auc - results$vt_auc, na.rm = TRUE),
+    max(results$oracle_auc - results$vt_auc, na.rm = TRUE)))
 cat(sprintf("%-18s %8.4f %8.4f %8.4f\n", "Fixed K=4", mean(results$k4_auc, na.rm = TRUE),
     mean(results$oracle_auc - results$k4_auc, na.rm = TRUE),
     max(results$oracle_auc - results$k4_auc, na.rm = TRUE)))
 
-cat(sprintf("\nGate exact match: %.1f%%\n", 100 * mean(results$gate_K == results$oracle_K, na.rm = TRUE)))
-cat(sprintf("CV exact match: %.1f%%\n", 100 * mean(results$cv_K == results$oracle_K, na.rm = TRUE)))
+cat(sprintf("\nGate exact match: %.1f%%\n", 100 * mean(results$gate_method == results$oracle_method, na.rm = TRUE)))
+cat(sprintf("Gate vs VT: Gate beats VT in %.1f%% of reps\n",
+    100 * mean(results$gate_auc > results$vt_auc, na.rm = TRUE)))
+cat(sprintf("VT vs CV:  VT beats CV in %.1f%% of reps\n",
+    100 * mean(results$vt_auc > results$cv_auc, na.rm = TRUE)))
+cat(sprintf("CV exact match vs K: %.1f%%\n", 100 * mean(results$cv_K == results$oracle_method, na.rm = TRUE)))
+
+cat("\n=== Method: VT-wins scenario ===\n")
+vt_wins <- results[which(results$vt_auc > apply(results[,c("k4_auc","cv_auc","gate_auc")], 1, max, na.rm=TRUE)),]
+if (nrow(vt_wins) > 0) {
+  for (nn in c(200,300,500,1000)) {
+    s <- vt_wins[vt_wins$n_train == nn,]
+    if (nrow(s) < 2) next
+    cat(sprintf("  n=%d (%d reps): VT wins when gate beats K=4 by %.4f\n",
+        nn, nrow(s), mean(s$gate_auc - s$k4_auc, na.rm=TRUE)))
+  }
+}
 
 cat("\n=== By n_train ===\n")
 for (nn in c(200, 300, 500, 1000)) {
@@ -244,6 +264,8 @@ for (nn in c(200, 300, 500, 1000)) {
       mean(s$oracle_auc - s$cv_auc, na.rm = TRUE)))
   cat(sprintf("  K=4:  %.4f (gap %.4f)\n", mean(s$k4_auc, na.rm = TRUE),
       mean(s$oracle_auc - s$k4_auc, na.rm = TRUE)))
+  cat(sprintf("  VT:   %.4f (gap %.4f)\n", mean(s$vt_auc, na.rm = TRUE),
+      mean(s$oracle_auc - s$vt_auc, na.rm = TRUE)))
 }
 
 out_file <- if (n_chunks > 1L) {

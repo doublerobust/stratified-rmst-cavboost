@@ -36,9 +36,11 @@ for (f in files) {
   row <- list(seed = r$seed,
     family = r$config$family,
     n_train = r$config$n_train,
-    optimal_K = r$oracle_optimal_K,
+    optimal_method = if (!is.null(r$oracle_optimal_method)) r$oracle_optimal_method
+                     else if (!is.null(r$oracle_optimal_K)) r$oracle_optimal_K else NA,
     auc_K1 = r$aucs[1], auc_K2 = r$aucs[2], auc_K3 = r$aucs[3],
-    auc_K4 = r$aucs[4], auc_K5 = r$aucs[5]
+    auc_K4 = r$aucs[4], auc_K5 = r$aucs[5],
+    auc_VT = if (length(r$aucs) >= 6) r$aucs[6] else NA
   )
   for (nm in FEATURES) {
     v <- r$features[[nm]]
