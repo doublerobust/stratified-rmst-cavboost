@@ -99,28 +99,42 @@ process_rep <- function(config_idx, all_configs, moe_dir, repo_dir,
     aucs <- setNames(rep(NA_real_, 5), paste0("auc_K", k_values))
     preds_list <- vector("list", 5)
 
-    # ---- Compute prognostic score ONCE ----
+    # ---- Compute prognostic score ONCE (robust: elastic net -> ridge -> Cox) ----
     prog_lp <- NULL
-    for (attempt in 1:5) {
-      prog_lp <- tryCatch({
-        n_tr <- nrow(train)
-        x <- data.matrix(train[, zcols, drop = FALSE])
-        y <- survival::Surv(train$time, train$status)
-        set.seed(seed + 999 + attempt * 100)
-        folds <- sample(rep(1:5, length.out = n_tr))
-        lp <- numeric(n_tr)
-        for (fold in 1:5) {
-          tr_idx <- which(folds != fold); te_idx <- which(folds == fold)
-          cv <- suppressWarnings(glmnet::cv.glmnet(
-            x[tr_idx, , drop = FALSE], y[tr_idx],
-            family = "cox", alpha = 0.5, nfolds = 5, 
-            cox.ties = "breslow"))
-          lp[te_idx] <- drop(stats::predict(cv, x[te_idx, , drop = FALSE], s = "lambda.min"))
-        }
-        lp
-      }, error = function(e) NULL)
+    n_tr <- nrow(train)
+    x_mat <- data.matrix(train[, zcols, drop = FALSE])
+    y_surv <- survival::Surv(train$time, train$status)
+    
+    for (alpha_val in c(0.5, 0)) {
       if (!is.null(prog_lp)) break
+      for (attempt in 1:3) {
+        if (!is.null(prog_lp)) break
+        prog_lp <- tryCatch({
+          set.seed(seed + 999 + attempt * 100 + as.integer(alpha_val * 100))
+          folds <- sample(rep(1:5, length.out = n_tr))
+          lp <- numeric(n_tr)
+          for (fold in 1:5) {
+            tr_idx <- which(folds != fold); te_idx <- which(folds == fold)
+            cv <- suppressWarnings(glmnet::cv.glmnet(
+              x_mat[tr_idx, , drop = FALSE], y_surv[tr_idx],
+              family = "cox", alpha = alpha_val, nfolds = 5,
+              cox.ties = "breslow"))
+            lp[te_idx] <- drop(stats::predict(cv, x_mat[te_idx, , drop = FALSE], s = "lambda.min"))
+          }
+          lp
+        }, error = function(e) NULL)
+      }
     }
+    
+    # Last resort: unpenalized Cox PH (no regularization)
+    if (is.null(prog_lp) && ncol(x_mat) < n_tr / 3) {
+      prog_lp <- tryCatch({
+        cox_fit <- survival::coxph(y_surv ~ ., data = train[, zcols], iter.max = 50)
+        stats::predict(cox_fit, type = "lp")
+      }, error = function(e) NULL)
+    }
+    
+    if (is.null(prog_lp)) warning(sprintf("  prog score failed: family=%s n=%d", cfg$family, n_tr))
 
     for (K in k_values) {
       if (K == 1L) {
