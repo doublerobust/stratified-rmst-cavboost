@@ -1,0 +1,45 @@
+# When Cross-Validation Fails: Pre-Trained Meta-Learning for Structural Decisions in Small-Sample Settings
+
+## 1. Introduction
+
+### 1.1 The Failure of Cross-Validation at Small Sample Sizes
+
+Cross-validation is the workhorse of model selection. It estimates out-of-sample performance using within-sample data, and for large samples it works well. But in the small-sample regime that characterizes early-phase clinical trials, genomic studies, and many biomedical settings — where n = 200–500 — cross-validation has a fundamental limitation: the standard error of a cross-validated performance estimate is comparable to or larger than the true performance difference between competing methods.
+
+This problem is not restricted to any particular modeling task. It affects hyperparameter tuning (how many trees? which shrinkage rate?), model class selection (boosting vs. random forest vs. neural net?), and structural decisions (should we stratify? what cutpoint?). In all these cases, the practitioner must make a choice based on data that is too sparse to inform it reliably. Cross-validation, applied to a single dataset, cannot see the forest for the trees: it has no access to information from other datasets, other trials, or other studies that faced similar structural decisions.
+
+### 1.2 A Pre-Training Alternative
+
+We propose a fundamentally different approach. Instead of relying on per-dataset cross-validation, we pre-train a meta-model — a "gate" — on thousands of synthetic datasets that collectively span the range of structural scenarios a practitioner might encounter. This gate learns to map dataset-level summary statistics (the "landmarking" features familiar from the meta-learning literature) to optimal structural decisions. Once pre-trained, the gate applies to a new dataset in a single forward pass: compute a small set of summary statistics (a few seconds of computation), feed them through the frozen gate, and obtain a recommendation.
+
+This is, in spirit, what foundation models do: pre-train on a broad distribution, transfer zero-shot to new instances. Our scale is smaller — thousands of synthetic datasets rather than billions of tokens — but the principle is the same. The critical difference is that our pre-training is performed on *interpretable meta-features*, not raw covariates. When the gate recommends a particular decision, it does so because the dataset's prognostic strength, interaction signal, and sample size resemble those of other datasets where that decision was optimal.
+
+### 1.3 The Worked Example: Adaptive Stratification for RMST Boosting
+
+We instantiate this framework with a concrete example: selecting the number of prognostic strata K for stratified RMST value-function-guided boosting in time-to-event subgroup identification.
+
+The problem is well-suited for several reasons. First, a single tuning parameter K controls the bias-variance tradeoff — too few strata leaves prognostic confounding unaddressed, too many fragments the data into uninformative groups — and the optimal K depends on observable data properties. Second, the cost of a suboptimal choice is bounded: K = 3 when K = 4 was optimal is a small efficiency loss, not a methodological disaster. Third, the decision is simple enough that the gate's behavior can be fully interrogated.
+
+Our results show that the pre-trained gate outperforms per-dataset 5-fold cross-validation at small sample sizes. At n = 200, the gate achieves 0.847 AUC versus 0.767 for CV — an 8-point improvement. At n = 500, the gap is 5 points (0.969 vs. 0.921). At n = 1000, performance converges. The gate retains 15 interpretable features, with the prognostic C-index, the bootstrap stability of that estimate, and the quadratic deviation of the treatment-effect profile emerging as the most informative predictors.
+
+### 1.4 The Larger Thesis
+
+The stratified RMST example is a demonstration, not the destination. The meta-learning framework we describe — (a) identify a structural decision that CV handles poorly at small n, (b) generate a broad simulation corpus that covers the decision's input space, (c) pre-train a gate on interpretable dataset-level features, (d) deploy zero-shot — applies across statistical modeling. Any setting where cross-validation for model selection is unreliable at realistic sample sizes is a candidate.
+
+We are not proposing a new method for stratification, nor a new approach to subgroup identification. We are proposing a new paradigm for how structural decisions can be made in data-poor environments: by leveraging information from synthetic data that mimics the breadth of real-world scenarios, summarized into interpretable meta-features that a gate can learn from.
+
+### 1.5 Contributions
+
+1. **A meta-learning framework for structural decisions**: We formalize the problem of replacing per-dataset cross-validation with a pre-trained gate operating on dataset-level meta-features.
+
+2. **A worked example via stratified RMST boosting**: We demonstrate the framework on the concrete problem of selecting the number of prognostic strata, showing that the gate outperforms cross-validation at small n.
+
+3. **A landmarking feature library for survival data**: Twenty-six interpretable features covering prognostic signal, interaction structure, treatment-effect profile, and data quality.
+
+4. **Empirical evidence for the small-n regime**: The gate beats CV by 8 AUC points at n = 200, with convergence by n = 1000.
+
+5. **Interpretability**: The LASSO-selected gate retains 15 features, providing insight into which data properties drive optimal structural decisions.
+
+### 1.6 Organization
+
+Section 2 reviews related work on cross-validation in small samples, meta-learning for algorithm selection, and the connection to foundation model pre-training. Section 3 describes the meta-learning pipeline: simulation generation, landmarking features, and gate architecture. Section 4 presents results on the stratified RMST example, including the comparison with cross-validation. Section 5 discusses which features the gate learns and the broader applicability of the framework. Section 6 concludes.
