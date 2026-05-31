@@ -15,6 +15,13 @@ FEATURES <- c("c_index","score_skew","score_kurt","score_var","score_q90_q10",
   "event_count_trt","event_count_ctrl","median_followup","mean_followup","n","p",
   "e_per_p","bootstrap_ci_sd","bootstrap_ci_mean","orig_pred_var","orig_pred_mean","orig_ambiguity")
 
+# Config fields with prediction value (from generative model)
+CONFIG_FEATURES <- c("n_predictive", "n_prognostic", "te_scale", "overlap", "b0",
+  "prognostic_form", "corr", "te_start", "te_peak", "te_decay")
+
+# Per-K prediction stats (computed by moe_simulation.R but not extracted)
+K_STATS <- c("pred_var", "pred_mean", "ambiguity")
+
 rows <- list()
 for (f in files) {
   r <- readRDS(f)
@@ -28,6 +35,19 @@ for (f in files) {
   for (nm in FEATURES) {
     v <- r$features[[nm]]
     row[[nm]] <- if (is.null(v) || length(v) != 1) NA_real_ else v
+  }
+  # Config features
+  for (nm in CONFIG_FEATURES) {
+    v <- r$config[[nm]]
+    row[[paste0("cfg_", nm)]] <- if (is.null(v) || length(v) != 1) NA_real_ else v
+  }
+  # Per-K prediction stats (K1..K5)
+  for (K in 1:5) {
+    for (stat in K_STATS) {
+      key <- paste0("K", K, "_", stat)
+      v <- r$features[[key]]
+      row[[key]] <- if (is.null(v) || length(v) != 1) NA_real_ else v
+    }
   }
   rows[[length(rows) + 1]] <- row
 }

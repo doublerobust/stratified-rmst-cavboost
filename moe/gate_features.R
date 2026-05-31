@@ -261,6 +261,94 @@ library(glmnet)
 
 
 # =========================================================================
+# H. Within-Arm Features (separate treatment and control)
+# =========================================================================
+
+.extract_within_arm_features <- function(data) {
+  zcols <- setdiff(names(data), c("trt01p", "time", "status"))
+  A <- data$trt01p
+  
+  # C-index within each arm
+  c_trt <- NA; c_ctrl <- NA
+  for (arm in 1:0) {
+    sub <- data[A == arm, c("time", "status", zcols)]
+    if (nrow(sub) < 20) next
+    cox <- tryCatch(
+      coxph(Surv(time, status) ~ ., data = sub, iter.max = 25),
+      error = function(e) NULL
+    )
+    if (!is.null(cox)) {
+      if (arm == 1) c_trt <- as.numeric(summary(cox)$concordance[1])
+      else c_ctrl <- as.numeric(summary(cox)$concordance[1])
+    }
+  }
+  
+  c(c_index_trt = c_trt,
+    c_index_ctrl = c_ctrl,
+    c_index_ratio = c_trt / c_ctrl)
+}
+
+# =========================================================================
+# I. Univariate Treatment Interaction Signals
+# =========================================================================
+
+.extract_te_interaction_features <- function(data) {
+  zcols <- setdiff(names(data), c("trt01p", "time", "status"))
+  A <- data$trt01p
+  
+  z_scores <- numeric(length(zcols))
+  for (j in seq_along(zcols)) {
+    # Fit Cox with treatment x covariate interaction
+    form <- as.formula(paste0("Surv(time, status) ~ trt01p + ", zcols[j], " + trt01p:", zcols[j]))
+    cox_int <- tryCatch(
+      coxph(form, data = data, iter.max = 25),
+      error = function(e) NULL
+    )
+    if (!is.null(cox_int)) {
+      # Extract interaction coefficient z-score
+      int_coef <- coef(cox_int)[paste0("trt01p:", zcols[j])]
+      if (!is.na(int_coef)) {
+        se <- sqrt(diag(vcov(cox_int)))[paste0("trt01p:", zcols[j])]
+        z_scores[j] <- abs(int_coef / se)
+      } else {
+        z_scores[j] <- 0
+      }
+    } else {
+      z_scores[j] <- 0
+    }
+  }
+  
+  c(
+    te_int_max_z = max(z_scores, na.rm = TRUE),
+    te_int_mean_z = mean(z_scores, na.rm = TRUE),
+    te_int_prop_sig = mean(z_scores > 1.96, na.rm = TRUE)
+  )
+}
+
+# =========================================================================
+# J. Feature Correlation Structure
+# =========================================================================
+
+.extract_correlation_features <- function(data) {
+  zcols <- setdiff(names(data), c("trt01p", "time", "status"))
+  X <- as.matrix(data[, zcols, drop = FALSE])
+  
+  cormat <- tryCatch(cor(X, use = "pairwise.complete.obs"), error = function(e) NULL)
+  
+  if (is.null(cormat) || ncol(cormat) < 2) {
+    return(c(corr_mean = NA, corr_max = NA, corr_prop_high = NA))
+  }
+  
+  tril_vals <- cormat[lower.tri(cormat)]
+  
+  c(
+    corr_mean = mean(abs(tril_vals)),
+    corr_max = max(abs(tril_vals)),
+    corr_prop_high = mean(abs(tril_vals) > 0.5)
+  )
+}
+
+# =========================================================================
 # Master feature extraction function
 # =========================================================================
 
@@ -280,6 +368,15 @@ compute_gate_features <- function(data, tau = 30, fit_orig = NULL, model_preds =
     
     # E. Efficiency
     .extract_efficiency_features(data),
+    
+    # H. Within-arm
+    .extract_within_arm_features(data),
+    
+    # I. TE interaction
+    .extract_te_interaction_features(data),
+    
+    # J. Correlation
+    .extract_correlation_features(data),
     
     # n and p explicitly
     n = nrow(data),

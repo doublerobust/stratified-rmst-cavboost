@@ -14,12 +14,14 @@
 # 4. Compares: gate AUC vs CV AUC vs fixed K=4
 
 library(glmnet)
+library(ranger)
 library(data.table)
 library(survival)
 
 source("moe/scenario_generator.R")
 source("R/stratified_cavboost.R")
 source("R/rmst_cavboost_clean.R")
+source("moe/gate_features.R")
 
 TAU <- 30
 NR <- 30
@@ -46,7 +48,10 @@ if (length(args) >= 2) {
 cat("Loading gate training data...\n")
 d <- fread("moe/results/gate_training_data.csv")
 
-feat_cols <- setdiff(names(d), c("family","n_train","optimal_K","auc_K1","auc_K2","auc_K3","auc_K4","auc_K5"))
+exclude_cols <- c("seed","family","n_train","optimal_K","oracle_rate",
+  "auc_K1","auc_K2","auc_K3","auc_K4","auc_K5",
+  "cfg_te_start","cfg_te_peak","cfg_te_decay")
+feat_cols <- setdiff(names(d), exclude_cols)
 cat(sprintf("  %d rows, %d features\n", nrow(d), length(feat_cols)))
 
 X <- as.matrix(d[, ..feat_cols])
@@ -61,14 +66,20 @@ X_tr <- X[idx,]; y_tr <- y[idx]
 X_te <- X[-idx,]; y_te <- y[-idx]
 cat(sprintf("  Train: %d, Test: %d\n", length(y_tr), length(y_te)))
 
-# ---- Train LASSO gate ----
-cat("Training gate...\n")
-cv_g <- cv.glmnet(X_tr, y_tr, family = "multinomial", alpha = 1, nfolds = 5)
-gate <- glmnet(X_tr, y_tr, family = "multinomial", alpha = 1, lambda = cv_g$lambda.min)
+# ---- Train Random Forest gate ----
+cat("Training gate (ranger random forest)...\n")
+gate <- ranger(
+  x = X_tr, y = factor(y_tr),
+  num.trees = 500,
+  mtry = floor(sqrt(ncol(X_tr))),
+  importance = "impurity",
+  seed = 20260530,
+  probability = TRUE
+)
 
 # Gate predictions on test set
-probs <- predict(gate, X_te, type = "response", s = cv_g$lambda.min)[,,1]
-gate_K <- apply(probs, 1, which.max)
+probs <- predict(gate, X_te)$predictions
+gate_K <- max.col(probs, ties.method = "first")
 
 # ---- Real 5-fold CV on test set ----
 cat(sprintf("Running real 5-fold CV on %d test reps...\n", length(y_te)))
