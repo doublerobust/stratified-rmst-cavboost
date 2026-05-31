@@ -21,8 +21,9 @@ import time
 REPO = subprocess.check_output(
     ["git", "rev-parse", "--show-toplevel"], text=True
 ).strip()
-SCRIPT = os.path.join(REPO, "moe", "moe_simulation.R")
-LOG_DIR = os.path.join(REPO, "moe", "results", "logs")
+REPO = REPO.replace("\\", "/")
+SCRIPT = os.path.join(REPO, "moe", "moe_simulation.R").replace("\\", "/")
+LOG_DIR = os.path.join(REPO, "moe", "results", "logs").replace("\\", "/")
 
 DEFAULT_CONFIGS = 500
 DEFAULT_REPS = 10
