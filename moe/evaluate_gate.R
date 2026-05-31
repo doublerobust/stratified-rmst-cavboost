@@ -193,24 +193,67 @@ for (i in seq_along(test_files)) {
   }
 
   cv_aucs <- vapply(1:5, function(K) run_cv_k(train, oracle, zcols, K, seed + 200), numeric(1))
+  
+  # ---- CV for VT (ranger per arm, 5-fold) ----
+  cv_vt_auc <- NA_real_
+  zcols_vt <- setdiff(names(train), c("trt01p", "time", "status"))
+  for (attempt in 1:3) {
+    seed_try <- seed + 900 + attempt
+    set.seed(seed_try)
+    folds <- sample(rep(1:5, length.out = n_tr))
+    fold_aucs <- numeric(5)
+    for (f in 1:5) {
+      tr <- train[folds != f,]
+      val <- train[folds == f,]
+      oracle_val <- oracle[folds == f]
+      if (sum(oracle_val) < 2 || sum(!oracle_val) < 2) next
+      ctrl <- tr[tr$trt01p == 0,]
+      trt_d <- tr[tr$trt01p == 1,]
+      if (nrow(ctrl) < 10 || nrow(trt_d) < 10) next
+      rf_c <- tryCatch(ranger(Surv(time, status) ~ ., data = ctrl[, c("time", "status", zcols_vt)],
+                           num.trees = 200, min.node.size = 10, seed = seed_try + f),
+                     error = function(e) NULL)
+      rf_t <- tryCatch(ranger(Surv(time, status) ~ ., data = trt_d[, c("time", "status", zcols_vt)],
+                           num.trees = 200, min.node.size = 10, seed = seed_try + f + 100),
+                     error = function(e) NULL)
+      if (is.null(rf_c) || is.null(rf_t)) next
+      pc <- predict(rf_c, val[, zcols_vt])
+      pt <- predict(rf_t, val[, zcols_vt])
+      tg <- seq(0, TAU, length.out = 200)
+      surv_grid <- function(surv_mat, times, grid) {
+        apply(surv_mat, 1, function(s) stats::approx(times, s, grid, rule = 2, yleft = 1)$y)
+      }
+      sc <- surv_grid(pc$survival, pc$unique.death.times, tg)
+      st <- surv_grid(pt$survival, pt$unique.death.times, tg)
+      vt_preds <- colMeans(st) * TAU - colMeans(sc) * TAU
+      fold_aucs[f] <- auc_(vt_preds, oracle_val)
+    }
+    fold_mean <- mean(fold_aucs[fold_aucs > 0], na.rm = TRUE)
+    if (is.finite(fold_mean)) { cv_vt_auc <- fold_mean; break }
+  }
+
+  # CV selects best among K1..K5 and VT
+  cv_methods <- c(cv_aucs, cv_vt_auc)
+  cv_method_opt <- if (length(cv_methods) > 0 && any(!is.na(cv_methods))) which.max(cv_methods) else NA_integer_
 
   # Get the actual test AUCs from the saved result
   test_aucs <- r$aucs
   oracle_opt <- if (!is.null(r$oracle_optimal_method)) r$oracle_optimal_method
                 else if (!is.null(r$oracle_optimal_K)) r$oracle_optimal_K else NA_integer_
-  cv_K_opt <- if (length(cv_aucs) > 0 && any(!is.na(cv_aucs))) which.max(cv_aucs) else NA_integer_
+  cv_methods <- c(cv_aucs, cv_vt_auc)
+  cv_method_opt <- if (length(cv_methods) > 0 && any(!is.na(cv_methods))) which.max(cv_methods) else NA_integer_
   gate_K_val <- gate_K[i]
 
   results <- rbind(results, data.frame(
     family = cfg$family, n_train = cfg$n_train,
     oracle_auc = test_aucs[oracle_opt],
     gate_auc = if (!is.na(gate_K_val)) test_aucs[gate_K_val] else NA,
-    cv_auc = if (!is.na(cv_K_opt)) test_aucs[cv_K_opt] else NA,
+    cv_auc = if (!is.na(cv_method_opt)) test_aucs[cv_method_opt] else NA,
     k4_auc = test_aucs[4],
     vt_auc = if (length(test_aucs) >= 6) test_aucs[6] else NA,
     oracle_method = oracle_opt,
     gate_method = gate_K_val,
-    cv_K = cv_K_opt
+    cv_method = cv_method_opt
   ))
 
   if (i %% 20 == 0) cat(sprintf("  %d/%d test reps done\n", i, length(test_files)))
@@ -239,11 +282,12 @@ cat(sprintf("%-18s %8.4f %8.4f %8.4f\n", "Fixed K=4", mean(results$k4_auc, na.rm
     max(results$oracle_auc - results$k4_auc, na.rm = TRUE)))
 
 cat(sprintf("\nGate exact match: %.1f%%\n", 100 * mean(results$gate_method == results$oracle_method, na.rm = TRUE)))
+cat(sprintf("CV exact match: %.1f%%\n", 100 * mean(results$cv_method == results$oracle_method, na.rm = TRUE)))
 cat(sprintf("Gate vs VT: Gate beats VT in %.1f%% of reps\n",
     100 * mean(results$gate_auc > results$vt_auc, na.rm = TRUE)))
 cat(sprintf("VT vs CV:  VT beats CV in %.1f%% of reps\n",
     100 * mean(results$vt_auc > results$cv_auc, na.rm = TRUE)))
-cat(sprintf("CV exact match vs K: %.1f%%\n", 100 * mean(results$cv_K == results$oracle_method, na.rm = TRUE)))
+cat(sprintf("CV exact match: %.1f%%\n", 100 * mean(results$cv_method == results$oracle_method, na.rm = TRUE)))
 
 cat("\n=== Method: VT-wins scenario ===\n")
 vt_wins <- results[which(results$vt_auc > apply(results[,c("k4_auc","cv_auc","gate_auc")], 1, max, na.rm=TRUE)),]
