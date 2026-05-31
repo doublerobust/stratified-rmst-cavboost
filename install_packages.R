@@ -1,0 +1,5 @@
+packages <- c("xgboost", "glmnet", "ranger", "survival", "mvtnorm", "pROC", "dplyr")
+lib_path <- file.path(Sys.getenv("USERPROFILE"), "R", "win-library", "4.6")
+dir.create(lib_path, recursive = TRUE, showWarnings = FALSE)
+installed <- install.packages(packages, repos = "https://cloud.r-project.org", lib = lib_path, quiet = TRUE)
+cat("R packages installed successfully\n")

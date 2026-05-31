@@ -12,7 +12,9 @@ import subprocess
 import sys
 import time
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = subprocess.check_output(
+    ["git", "rev-parse", "--show-toplevel"], text=True
+).strip()
 SCRIPT = os.path.join(REPO, "moe", "evaluate_gate.R")
 DEFAULT_CORES = 10
 
