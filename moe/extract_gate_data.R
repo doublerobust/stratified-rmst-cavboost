@@ -101,18 +101,26 @@ if ("config_idx" %in% names(df)) {
   first_vals <- unique(df[, c("config_idx", first_cols), with = FALSE])
   agg <- merge(agg, first_vals, by = "config_idx")
   
+  # Build AUC matrix for oracle selection
+  auc_mat <- as.matrix(agg[, ..auc_cols])
+  
   # Drop configs where all AUCs are NA (can't determine oracle)
   na_count <- rowSums(is.na(auc_mat))
   if (any(na_count == ncol(auc_mat))) {
     cat(sprintf("Dropping %d configs with all NA AUCs\n", sum(na_count == ncol(auc_mat))))
     agg <- agg[na_count < ncol(auc_mat), ]
+    auc_mat <- as.matrix(agg[, ..auc_cols])
   }
   
-  # Oracle method = which has highest mean AUC
-  auc_mat <- as.matrix(agg[, ..auc_cols])
+  # Oracle method = which has highest mean AUC (NA-safe)
+  auc_mat[is.na(auc_mat)] <- -Inf
   agg$optimal_method <- max.col(auc_mat, ties.method = "first")
   
   # Drop config_idx from final output
+  # Drop config_idx from final output, but keep a reference seed for RDS matching
+  first_vals <- unique(df[, c("config_idx", "seed"), with = FALSE])
+  first_vals <- first_vals[, .(seed = seed[1]), by = config_idx]
+  agg <- merge(agg, first_vals, by = "config_idx")
   agg[, config_idx := NULL]
   
   cat(sprintf("Aggregated to %d configs\n", nrow(agg)))
