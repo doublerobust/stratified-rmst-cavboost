@@ -3,7 +3,9 @@
 # Designed for the Omen (fast, sequential, Windows-compatible)
 #
 # Usage:
-#   Rscript moe/evaluate_gate.R
+#   Rscript moe/evaluate_gate.R               # sequential
+#   Rscript moe/evaluate_gate.R 0 10           # chunk 0 of 10 (parallel)
+#   python3 moe/run_parallel_gate.py           # auto: 10 cores
 #
 # This script:
 # 1. Reads gate training data (features + oracle optimal K)
@@ -28,6 +30,16 @@ auc_ <- function(p, l) {
   if (npos < 1 || nneg < 1) return(NA)
   r <- rank(p)
   (sum(r[as.logical(l)]) - npos * (npos + 1) / 2) / (npos * nneg)
+}
+
+# ---- Parse parallel chunk args ----
+args <- commandArgs(trailingOnly = TRUE)
+chunk_idx <- 0L
+n_chunks <- 1L
+if (length(args) >= 2) {
+  chunk_idx <- as.integer(args[1])
+  n_chunks <- as.integer(args[2])
+  cat(sprintf("Parallel mode: chunk %d of %d\n", chunk_idx + 1L, n_chunks))
 }
 
 # ---- Load gate training data ----
@@ -61,6 +73,19 @@ gate_K <- apply(probs, 1, which.max)
 # ---- Real 5-fold CV on test set ----
 cat(sprintf("Running real 5-fold CV on %d test reps...\n", length(y_te)))
 cat("(This will take a while)\n\n")
+
+# ---- Parallel chunking ----
+if (n_chunks > 1L) {
+  chunk_size <- ceiling(length(test_files) / n_chunks)
+  chunk_start <- chunk_idx * chunk_size + 1L
+  chunk_end <- min((chunk_idx + 1L) * chunk_size, length(test_files))
+  idx_chunk <- chunk_start:chunk_end
+  test_files <- test_files[idx_chunk]
+  d_test <- d_test[idx_chunk, , drop = FALSE]
+  gate_K <- gate_K[idx_chunk]
+  cat(sprintf("Chunk %d: files %d to %d (%d total)\n",
+      chunk_idx + 1L, chunk_start, chunk_end, length(test_files)))
+}
 
 files_all <- list.files("moe/results", "rep_.*\\.rds$", full.names = TRUE)
 if (length(files_all) == 0) {
@@ -103,57 +128,61 @@ for (i in seq_along(test_files)) {
   n_tr <- nrow(train)
 
   # 5-fold CV
-  set.seed(seed + 200)
-  folds <- sample(rep(1:5, length.out = n_tr))
-  cv_aucs <- numeric(5)
-
-  for (K in 1:5) {
-    fold_aucs <- numeric(5)
-    for (f in 1:5) {
-      tr <- train[folds != f,]
-      val <- train[folds == f,]
-      oracle_val <- oracle[folds == f]
-      
-      if (sum(oracle_val) < 2 || sum(!oracle_val) < 2) next
-
-      if (K == 1L) {
-        fit <- tryCatch(train_rmst_cavboost(tr, tr$time, tr$status, TAU,
-                          eta = 0.05, max_depth = 3, nr = NR),
-                        error = function(e) NULL)
-      } else {
-        x_fold <- data.matrix(tr[, zcols, drop = FALSE])
-        y_fold <- Surv(tr$time, tr$status)
-        qq <- tryCatch({
-          set.seed(seed + K + f)
-          folds_inner <- sample(rep(1:5, length.out = nrow(tr)))
-          lp <- numeric(nrow(tr))
-          for (fi in 1:5) {
-            tri <- which(folds_inner != fi); tei <- which(folds_inner == fi)
-            cv_glm <- cv.glmnet(x_fold[tri,], y_fold[tri], family = "cox",
-                                alpha = 0.5, nfolds = 5, cox.ties = "breslow")
-            lp[tei] <- drop(predict(cv_glm, x_fold[tei,], s = "lambda.min"))
+  # Adaptive CV: try 5-fold -> 3-fold -> 2-fold, up to 3 random splits each
+  run_cv_k <- function(train, oracle, zcols, K, base_seed) {
+    for (n_folds in c(5L, 3L, 2L)) {
+      for (attempt in 1:3) {
+        seed_try <- base_seed + n_folds * 100 + attempt
+        set.seed(seed_try)
+        folds <- sample(rep(1:n_folds, length.out = nrow(train)))
+        fold_aucs <- numeric(n_folds)
+        for (f in 1:n_folds) {
+          tr <- train[folds != f,]
+          val <- train[folds == f,]
+          oracle_val <- oracle[folds == f]
+          if (sum(oracle_val) < 2 || sum(!oracle_val) < 2) next
+          if (K == 1L) {
+            fit <- tryCatch(train_rmst_cavboost(tr, tr$time, tr$status, TAU,
+                              eta = 0.05, max_depth = 3, nr = NR),
+                            error = function(e) NULL)
+          } else {
+            x_fold <- data.matrix(tr[, zcols, drop = FALSE])
+            y_fold <- Surv(tr$time, tr$status)
+            qq <- tryCatch({
+              set.seed(seed_try + K + f)
+              folds_inner <- sample(rep(1:5, length.out = nrow(tr)))
+              lp <- numeric(nrow(tr))
+              for (fi in 1:5) {
+                tri <- which(folds_inner != fi); tei <- which(folds_inner == fi)
+                cv_glm <- cv.glmnet(x_fold[tri,], y_fold[tri], family = "cox",
+                                    alpha = 0.5, nfolds = 5, cox.ties = "breslow")
+                lp[tei] <- drop(predict(cv_glm, x_fold[tei,], s = "lambda.min"))
+              }
+              unique(quantile(lp, seq(0, 1, 1/K), na.rm = TRUE))
+            }, error = function(e) NULL)
+            if (is.null(qq) || length(qq) < 2) next
+            strata <- as.numeric(cut(lp, qq, include.lowest = TRUE, right = TRUE))
+            fit <- tryCatch(train_stratified_cavboost(tr, tr$time, tr$status, TAU,
+                                stratum = strata, eta = 0.05, max_depth = 3, nr = NR),
+                            error = function(e) NULL)
           }
-          unique(quantile(lp, seq(0, 1, 1/K), na.rm = TRUE))
-        }, error = function(e) NULL)
-        
-        if (is.null(qq) || length(qq) < 2) next
-        strata <- as.numeric(cut(lp, qq, include.lowest = TRUE, right = TRUE))
-        fit <- tryCatch(train_stratified_cavboost(tr, tr$time, tr$status, TAU,
-                            stratum = strata, eta = 0.05, max_depth = 3, nr = NR),
-                        error = function(e) NULL)
+          if (is.null(fit)) next
+          pred <- tryCatch(pred_subgroup(fit, val), error = function(e) NULL)
+          if (!is.null(pred)) fold_aucs[f] <- auc_(pred, oracle_val)
+        }
+        fold_mean <- mean(fold_aucs[fold_aucs > 0], na.rm = TRUE)
+        if (is.finite(fold_mean)) return(fold_mean)
       }
-      if (is.null(fit)) next
-
-      pred <- tryCatch(pred_subgroup(fit, val), error = function(e) NULL)
-      if (!is.null(pred)) fold_aucs[f] <- auc_(pred, oracle_val)
     }
-    cv_aucs[K] <- mean(fold_aucs[fold_aucs > 0], na.rm = TRUE)
+    NA_real_
   }
+
+  cv_aucs <- vapply(1:5, function(K) run_cv_k(train, oracle, zcols, K, seed + 200), numeric(1))
 
   # Get the actual test AUCs from the saved result
   test_aucs <- r$aucs
   oracle_opt <- r$oracle_optimal_K
-  cv_K_opt <- which.max(cv_aucs)
+  cv_K_opt <- if (length(cv_aucs) > 0 && any(!is.na(cv_aucs))) which.max(cv_aucs) else NA_integer_
   gate_K_val <- gate_K[i]
 
   results <- rbind(results, data.frame(
@@ -168,6 +197,10 @@ for (i in seq_along(test_files)) {
   ))
 
   if (i %% 20 == 0) cat(sprintf("  %d/%d test reps done\n", i, length(test_files)))
+  if (i %% 50 == 0) {
+    dir.create("rds", showWarnings = FALSE)
+    saveRDS(results, "rds/gate_intermediate_results.rds")
+  }
 }
 
 # ---- Summary ----
@@ -201,5 +234,10 @@ for (nn in c(200, 300, 500, 1000)) {
       mean(s$oracle_auc - s$k4_auc, na.rm = TRUE)))
 }
 
-write.csv(results, "moe/results/gate_evaluation.csv", row.names = FALSE)
-cat("\nResults saved to: moe/results/gate_evaluation.csv\n")
+out_file <- if (n_chunks > 1L) {
+  sprintf("moe/results/gate_evaluation_chunk_%d.csv", chunk_idx)
+} else {
+  "moe/results/gate_evaluation.csv"
+}
+write.csv(results, out_file, row.names = FALSE)
+cat(sprintf("\nResults saved to: %s\n", out_file))
