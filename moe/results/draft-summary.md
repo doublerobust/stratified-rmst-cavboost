@@ -64,7 +64,11 @@ The [global feature importance plot](https://github.com/doublerobust/stratified-
 
 ## Statistical Significance
 
-Is the gate's AUC advantage real, or could it be Monte Carlo noise? A paired t-test confirms the difference is statistically meaningful:
+Is the gate's AUC advantage real, or could it be Monte Carlo noise? The histogram below shows the distribution of paired differences (Gate AUC − CV AUC) across all 989 test splits, broken down by sample size.
+
+![Gate vs CV AUC difference histograms by sample size](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_vs_cv_histograms.pdf?raw=true)
+
+The green tail (Gate wins) is thicker and extends further than the red tail (CV wins) at every sample size. A paired t-test confirms the overall difference is statistically meaningful:
 
 | Metric | Value |
 |--------|:-----:|
@@ -75,7 +79,7 @@ Is the gate's AUC advantage real, or could it be Monte Carlo noise? A paired t-t
 
 By sample size, the difference is significant at $n=200$ ($p=0.013$), $n=300$ ($p=0.013$), and $n=1000$ ($p=0.025$). The only non-significant result is $n=500$ ($p=0.26$), where the gate's advantage is smallest (+0.0043 AUC).
 
-Importantly, the gate wins in only **30.6%** of individual splits but still achieves a significantly higher mean AUC. This is because the gate's wins are decisive (large advantages) while its losses are narrow (small disadvantages). CV occasionally gets lucky and picks the right $K$, but when it misses, it misses badly. The gate avoids those catastrophic misses.
+Notably, the gate wins in only **30.6%** of individual splits but still achieves a significantly higher mean AUC. This is because the gate's typical win (+0.071 median) is **44% larger** than CV's typical win (+0.049 median). The gate wins more often than CV (30.6% vs 23.3%), and when it wins, it wins by a larger margin.
 
 ## Discussion
 
