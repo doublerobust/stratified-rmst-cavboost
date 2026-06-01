@@ -243,18 +243,15 @@ heat_df <- do.call(rbind, heatmap_rows)
 heat_df$dataset <- factor(heat_df$dataset, levels = rev(unique(dataset_labels)))
 heat_df$feature <- factor(heat_df$feature, levels = col_order)
 
-# Domain annotation header
-domain_annot <- data.frame(
-  feature = col_order,
-  domain  = col_domain,
-  stringsAsFactors = FALSE
-)
-domain_annot$feature <- factor(domain_annot$feature, levels = col_order)
-
 # Domain separator positions
 domain_tbl <- table(col_domain)[unique(col_domain)]
 domain_seps <- data.frame(x = cumsum(domain_tbl) + 0.5)
 domain_seps <- domain_seps[-nrow(domain_seps), , drop = FALSE]
+
+# Domain midpoints for x-axis labels (center of each domain block)
+domain_cumvals <- cumsum(domain_tbl)
+domain_midxs <- c(1, head(domain_cumvals, -1) + 1) + domain_tbl / 2 - 0.5
+domain_labels <- gsub("_", " ", names(domain_tbl))
 
 # Build the heatmap
 p2 <- ggplot(heat_df, aes(x = feature, y = dataset, fill = activation)) +
@@ -272,38 +269,36 @@ p2 <- ggplot(heat_df, aes(x = feature, y = dataset, fill = activation)) +
   theme_minimal(base_size = 9) +
   theme(
     plot.title        = element_text(hjust = 0.5, face = "bold", size = 12),
-    axis.text.x       = element_text(angle = 45, hjust = 1, vjust = 1, size = 7),
+    axis.text.x       = element_text(size = 5, angle = 0, hjust = 0.5),
     axis.text.y       = element_text(size = 6),
     panel.grid        = element_blank(),
     legend.position   = "right",
     legend.key.height = unit(1.5, "cm")
   )
 
-# Domain colored top bar
-domain_bar <- ggplot(domain_annot, aes(x = feature, y = 1, fill = domain)) +
-  geom_tile() +
-  scale_fill_manual(
-    values = DOMAIN_COLORS,
-    name   = "Domain",
-    breaks = names(DOMAIN_COLORS)
-  ) +
-  scale_y_continuous(expand = c(0, 0)) +
-  labs(x = NULL, y = NULL) +
-  theme_void() +
-  theme(
-    legend.position = "none",
-    plot.margin     = margin(0, 0, 0, 0),
-    axis.text.x     = element_blank(),
-    axis.ticks.x    = element_blank()
-  ) +
-  geom_vline(data = domain_seps, aes(xintercept = x),
-             color = "grey30", linewidth = 0.4, linetype = "solid")
+# Domain name row below x-axis
+# Build a separate gtable row showing domain names centered under their feature blocks
+# First, compute width proportions for the domain name strip
+domain_widths <- unit(domain_tbl, "null")
 
-# Combine domain bar + heatmap
-p2_combined <- grid.arrange(
-  domain_bar, p2,
+# Create the domain label grobs
+domain_grobs <- mapply(function(lbl) {
+  textGrob(lbl, x = 0.5, y = 0.3,
+           gp = gpar(fontsize = 8, fontface = "bold", col = "grey40"))
+}, domain_labels, SIMPLIFY = FALSE)
+
+# Lay them out in a row
+domain_label_row <- arrangeGrob(
+  grobs = domain_grobs,
+  nrow = 1, ncol = length(domain_grobs),
+  widths = domain_widths
+)
+
+p2_combined <- arrangeGrob(
+  p2,
+  domain_label_row,
   nrow = 2, ncol = 1,
-  heights = c(0.3, 4)
+  heights = c(5, 0.4)
 )
 
 ggsave(file.path(OUT_DIR, "gate_activation_heatmap.pdf"),
