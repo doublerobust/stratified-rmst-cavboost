@@ -59,46 +59,47 @@ library(glmnet)
     error = function(e) NULL
   )
   
-  # Cox: time ~ Z + A + Z:A — for interaction detection
-  interaction_formula <- as.formula(
-    paste("Surv(time, status) ~ . + trt01p + trt01p:(", 
-          paste(zcols, collapse = "+"), ")")
+  # Main-effects model with treatment (for delta_c_index and trt_main_p)
+  main_formula <- as.formula(
+    paste("Surv(time, status) ~ trt01p +", paste(zcols, collapse = "+"))
   )
-  
-  cox_int <- tryCatch(
-    coxph(interaction_formula, data = data, iter.max = 25),
+  cox_main <- tryCatch(
+    coxph(main_formula, data = data, iter.max = 25),
     error = function(e) NULL
   )
   
-  if (is.null(cox_null) || is.null(cox_int)) {
+  if (is.null(cox_null) || is.null(cox_main)) {
     return(c(delta_c_index = NA, prop_interact_sig = NA, trt_main_p = NA))
   }
   
-  # C-index difference (interaction model minus null)
+  # C-index difference (main effects model minus null)
   c_null <- as.numeric(summary(cox_null)$concordance[1])
-  c_int <- as.numeric(summary(cox_int)$concordance[1])
-  delta_ci <- c_int - c_null
-  
-  # Extract treatment interaction coefficients
-  trt_interact_idx <- grep("^trt01p:", names(coef(cox_int)))
-  
-  # Proportion of significant interactions (Wald p < 0.1)
-  if (length(trt_interact_idx) > 0) {
-    se <- sqrt(diag(vcov(cox_int)))[trt_interact_idx]
-    z <- abs(coef(cox_int)[trt_interact_idx] / se)
-    prop_sig <- mean(2 * pnorm(-z) < 0.1, na.rm = TRUE)
-  } else {
-    prop_sig <- NA
-  }
+  c_main <- as.numeric(summary(cox_main)$concordance[1])
+  delta_ci <- c_main - c_null
   
   # Treatment main effect p-value
-  trt_idx <- which(names(coef(cox_int)) == "trt01p")
-  if (length(trt_idx) == 1) {
-    se_trt <- sqrt(diag(vcov(cox_int)))[trt_idx]
-    trt_p <- 2 * pnorm(-abs(coef(cox_int)[trt_idx] / se_trt))
-  } else {
-    trt_p <- NA
+  trt_sum <- coef(summary(cox_main))
+  trt_idx <- which(rownames(trt_sum) == "trt01p")
+  trt_p <- if (length(trt_idx) == 1) trt_sum[trt_idx, "Pr(>|z|)"] else NA
+  
+  # Univariate interaction screening: test A:Z_j one at a time
+  sig_count <- 0
+  total_tested <- 0
+  for (zc in zcols) {
+    uni_formula <- as.formula(paste("Surv(time, status) ~", zc, "* trt01p"))
+    uni_fit <- tryCatch(
+      coxph(uni_formula, data = data, iter.max = 25),
+      error = function(e) NULL
+    )
+    if (is.null(uni_fit)) next
+    uni_sum <- coef(summary(uni_fit))
+    interact_row <- grep(paste0("^", zc, ":trt01p$|^trt01p:", zc, "$"), rownames(uni_sum))
+    if (length(interact_row) == 1) {
+      total_tested <- total_tested + 1
+      if (uni_sum[interact_row, "Pr(>|z|)"] < 0.1) sig_count <- sig_count + 1
+    }
   }
+  prop_sig <- if (total_tested > 0) sig_count / total_tested else NA
   
   c(delta_c_index = delta_ci,
     prop_interact_sig = prop_sig,
