@@ -94,6 +94,8 @@ Notably, the gate wins in only **30.6%** of individual splits but still achieves
 
 ## References
 
-- Zhang et al. (2023). Mixture-of-Experts for survival analysis.
-- Schuler et al. (2022). Prognostic score adjustment.
-- Mehrotra (2021). ENET-based risk stratification (5-STAR).
+- Schuler A, et al. (2022). Increasing the efficiency of randomized trial estimates via linear adjustment for a prognostic score. *Int J Biostatistics* 18(2):329-356. DOI: 10.1515/ijb-2021-0072.
+- Mehrotra DV. (2021). Blinded independent central review: a path toward more efficient and ethical clinical trials. *Statistics in Biopharmaceutical Research* 13(2):149-159.
+- Friedman J, et al. (2010). Regularization paths for generalized linear models via coordinate descent. *JSS* 33(1):1-22. DOI: 10.18637/jss.v033.i01.
+- Gail MH, Wieand S, Piantadosi S. (1984). Biased estimates of treatment effect in randomized experiments with nonlinear regressions and omitted covariates. *Biometrika* 71(3):431-444. DOI: 10.1093/biomet/71.3.431.
+- Hajage D, et al. (2018). On the use of the prognostic score for the analysis of randomized trials with multiple covariate adjustment. *Statistics in Medicine* 37(9):1421-1438.
