@@ -66,7 +66,7 @@ The [global feature importance plot](https://github.com/doublerobust/stratified-
 
 Is the gate's AUC advantage real, or could it be Monte Carlo noise? The histogram below shows the distribution of paired differences (Gate AUC − CV AUC) across all 989 test splits, broken down by sample size.
 
-![Gate vs CV AUC difference histograms by sample size](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_vs_cv_histograms.pdf?raw=true)
+![Gate vs CV AUC difference histograms by sample size](https://raw.githubusercontent.com/doublerobust/stratified-rmst-cavboost/moe-integration/moe/results/gate_vs_cv_histograms.png)
 
 The green tail (Gate wins) is thicker and extends further than the red tail (CV wins) at every sample size. A paired t-test confirms the overall difference is statistically meaningful:
 
