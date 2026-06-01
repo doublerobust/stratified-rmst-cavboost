@@ -62,6 +62,21 @@ The RF importance reveals which dataset characteristics drive the gate's decisio
 
 The [global feature importance plot](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_global_importance.pdf) confirms which features dominate the gate's decisions — C-index and bootstrap confidence intervals at the top, score skewness and correlation features at the bottom. The [multi-dataset activation heatmap](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_activation_heatmap.pdf) shows that different scenario families ("s_shaped", "bump", "linear") light up distinct feature domains, and the [single-dataset brain slice](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_brain_slice.pdf) provides a detailed view of which domains activate for a representative dataset.
 
+## Statistical Significance
+
+Is the gate's AUC advantage real, or could it be Monte Carlo noise? A paired t-test confirms the difference is statistically meaningful:
+
+| Metric | Value |
+|--------|:-----:|
+| Mean AUC difference (Gate − CV) | **+0.0097** |
+| 95% CI | [0.0050, 0.0145] |
+| Paired t-statistic | 4.02 |
+| p-value | $6.4 \times 10^{-5}$ |
+
+By sample size, the difference is significant at $n=200$ ($p=0.013$), $n=300$ ($p=0.013$), and $n=1000$ ($p=0.025$). The only non-significant result is $n=500$ ($p=0.26$), where the gate's advantage is smallest (+0.0043 AUC).
+
+Importantly, the gate wins in only **30.6%** of individual splits but still achieves a significantly higher mean AUC. This is because the gate's wins are decisive (large advantages) while its losses are narrow (small disadvantages). CV occasionally gets lucky and picks the right $K$, but when it misses, it misses badly. The gate avoids those catastrophic misses.
+
 ## Discussion
 
 **When is the gate most valuable?** At the extremes: $n \leq 300$ where CV is unreliable, and $n \geq 1000$ where the oracle has many viable options and the gate's richer feature set gives it an edge. The $n=500$ region is the convergence zone — CV works adequately and the gate's features are still noisy — but even there the gate matches or beats CV.
