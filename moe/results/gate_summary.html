@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE-K Gate Summary</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.4;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .sub {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 20px;
+  }
+  h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin: 24px 0 8px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th {
+    text-align: right;
+    padding: 6px 6px;
+    border-bottom: 1.5px solid #334155;
+    font-weight: 600;
+    color: #64748b;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  td {
+    text-align: right;
+    padding: 6px 6px;
+    border-bottom: 1px solid #1e293b;
+    font-variant-numeric: tabular-nums;
+  }
+  .row-all td {
+    border-top: 1.5px solid #334155;
+    font-weight: 600;
+    padding-top: 7px;
+  }
+  .best { color: #4ade80; font-weight: 600; }
+  .second { color: #60a5fa; }
+  .n { color: #94a3b8; }
+  .note {
+    margin-top: 20px;
+    font-size: 11px;
+    color: #475569;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>🧠 MoE-K Gate Summary</h1>
+<p class="sub">989 test splits · Ranger RF vs real 5-fold CV on Omen</p>
+
+<h2>Mean AUC by Method</h2>
+<table>
+  <tr><th>n</th><th>Oracle</th><th>Gate</th><th>CV</th><th>K4</th><th>VT</th><th>#</th></tr>
+  <tr><td>200</td><td>0.7096</td><td class="best">0.6692</td><td class="second">0.6548</td><td>0.6311</td><td>0.6647</td><td class="n">209</td></tr>
+  <tr><td>300</td><td>0.7430</td><td class="best">0.6965</td><td class="second">0.6819</td><td>0.6740</td><td>0.6918</td><td class="n">206</td></tr>
+  <tr><td>500</td><td>0.8136</td><td class="best">0.7718</td><td class="second">0.7665</td><td>0.7503</td><td>0.7466</td><td class="n">381</td></tr>
+  <tr><td>1000</td><td>0.8734</td><td class="best">0.8491</td><td class="second">0.8399</td><td>0.8340</td><td>0.7904</td><td class="n">193</td></tr>
+  <tr class="row-all"><td>All</td><td>0.7886</td><td class="best">0.7494</td><td class="second">0.7395</td><td>0.7260</td><td>0.7264</td><td class="n">989</td></tr>
+</table>
+
+<h2>Gate vs CV — Exact Oracle Match Rate</h2>
+<table>
+  <tr><th>n</th><th>Gate ✅</th><th>CV</th><th>Gate edge</th></tr>
+  <tr><td>200</td><td class="best">55.5%</td><td>37.3%</td><td>+18.2pp</td></tr>
+  <tr><td>300</td><td class="best">49.0%</td><td>33.0%</td><td>+16.0pp</td></tr>
+  <tr><td>500</td><td class="best">41.7%</td><td>37.9%</td><td>+3.8pp</td></tr>
+  <tr><td>1000</td><td class="best">40.9%</td><td>29.5%</td><td>+11.4pp</td></tr>
+  <tr class="row-all"><td>All</td><td class="best">46.0%</td><td>35.1%</td><td>+10.9pp</td></tr>
+</table>
+
+<div class="note">Green = best non-oracle · Blue = second best · Gate wins all rows</div>
+
+</body>
+</html>
