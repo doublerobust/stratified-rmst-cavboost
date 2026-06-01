@@ -60,7 +60,7 @@ The RF importance reveals which dataset characteristics drive the gate's decisio
 | Sample regime | `n`, `p`, `e_per_p` | Mild — mainly affects confidence in other features |
 | Interaction structure | `delta_c_index`, `prop_interact_sig` | Weakest — non-linear miscalibration patterns |
 
-The activation heatmaps (Figure 3) show that different scenario families ("s_shaped", "bump", "linear") light up distinct feature domains, confirming the gate is learning scenario-specific decision rules rather than a single default.
+The [global feature importance plot](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_global_importance.pdf) confirms which features dominate the gate's decisions — C-index and bootstrap confidence intervals at the top, score skewness and correlation features at the bottom. The [multi-dataset activation heatmap](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_activation_heatmap.pdf) shows that different scenario families ("s_shaped", "bump", "linear") light up distinct feature domains, and the [single-dataset brain slice](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_brain_slice.pdf) provides a detailed view of which domains activate for a representative dataset.
 
 ## Discussion
 
