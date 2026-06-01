@@ -75,7 +75,7 @@ The green tail (Gate wins) is thicker and extends further than the red tail (CV 
 | Mean AUC difference (Gate − CV) | **+0.0097** |
 | 95% CI | [0.0050, 0.0145] |
 | Paired t-statistic | 4.02 |
-| p-value | $6.4 \times 10^{-5}$ |
+| p-value | 0.000064 (≈ 6.4 × 10⁻⁵) |
 
 By sample size, the difference is significant at $n=200$ ($p=0.013$), $n=300$ ($p=0.013$), and $n=1000$ ($p=0.025$). The only non-significant result is $n=500$ ($p=0.26$), where the gate's advantage is smallest (+0.0043 AUC).
 
