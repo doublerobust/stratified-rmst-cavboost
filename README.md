@@ -109,9 +109,6 @@ See `moe/run_on_omen_docker.sh` for the full launcher.
 
 ## MoE-K Reference
 
-For the underlying stratified RMST estimator and original CAVBoost:
+For the underlying stratified RMST estimator and original RMST Boosting:
 
-Zhang, P., Liu, P., Chen, X., Ma, J., & Shentu, Y. (2020).
-*A nonparametric method for value function guided subgroup identification
-via gradient tree boosting for censored survival data.*
-Statistics in Medicine, 39(28), 4133–4146. PMID: 32786155.
+Zhang P, Ma J, Chen X, Shentu Y. A nonparametric method for value function guided subgroup identification via gradient tree boosting for censored survival data. Statistics in Medicine. 2020;39:4133–4146. https://doi.org/10.1002/sim.8714
