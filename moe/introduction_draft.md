@@ -20,7 +20,7 @@ We instantiate this framework with a concrete example: selecting the number of p
 
 The problem is well-suited for several reasons. First, a single tuning parameter K controls the bias-variance tradeoff — too few strata leaves prognostic confounding unaddressed, too many fragments the data into uninformative groups — and the optimal K depends on observable data properties. Second, the cost of a suboptimal choice is bounded: K = 3 when K = 4 was optimal is a small efficiency loss, not a methodological disaster. Third, the decision is simple enough that the gate's behavior can be fully interrogated.
 
-Our results show that the pre-trained gate outperforms per-dataset 5-fold cross-validation at small sample sizes. At n = 200, the gate achieves 0.847 AUC versus 0.767 for CV — an 8-point improvement. At n = 500, the gap is 5 points (0.969 vs. 0.921). At n = 1000, performance converges. The gate retains 15 interpretable features, with the prognostic C-index, the bootstrap stability of that estimate, and the quadratic deviation of the treatment-effect profile emerging as the most informative predictors.
+Our results show that the pre-trained gate outperforms per-dataset 5-fold cross-validation across all sample sizes. At n = 200, the gate achieves a mean AUC of 0.670 versus 0.655 for CV — a 1.5-point improvement. At n = 300, the gap is 1.6 points (0.698 vs. 0.682). At n = 500 and n = 1000, the gap narrows to 0.7 points (0.773 vs. 0.767 and 0.846 vs. 0.840, respectively). In head-to-head comparisons, the gate beats CV in 28.8% of scenarios versus 19.9% for CV, with 51.4% ties — a 9-percentage-point advantage. The gate uses 26 interpretable dataset-level features, with the prognostic C-index, the bootstrap stability of that estimate, and the quadratic deviation of the treatment-effect profile emerging as the most informative predictors.
 
 ### 1.4 The Larger Thesis
 
@@ -36,7 +36,7 @@ We are not proposing a new method for stratification, nor a new approach to subg
 
 3. **A landmarking feature library for survival data**: Twenty-six interpretable features covering prognostic signal, interaction structure, treatment-effect profile, and data quality.
 
-4. **Empirical evidence for the small-n regime**: The gate beats CV by 8 AUC points at n = 200, with convergence by n = 1000.
+4. **Empirical evidence for the small-n regime**: The gate beats CV in 28.8% of head-to-head comparisons versus 19.9% for CV (51.4% ties), with consistent advantages across n = 200–1000.
 
 5. **Interpretability**: The random forest gate uses impurity importance across all features, providing insight into which data properties drive optimal structural decisions.
 

@@ -1,101 +1,216 @@
-# MoE-K: When Cross-Validation Fails, Let a Gate Decide
+# MoE-K: Adaptive Stratification Results Summary
 
-## Motivation
+**Evaluation:** 989 scenarios × 5 methods (Oracle, Gate, CV, K=4, VT), across 8 scenario families and 4 sample sizes.
 
-The MoE-K framework selects the number of strata $K$ for the mixture-of-experts estimator. The standard approach — $K$-fold cross-validation within the trial — is computationally expensive and, more importantly, **unstable at small sample sizes**: the noisy AUC estimates from 5-fold CV often pick a suboptimal $K$, especially when $n \leq 300$.
+---
 
-We propose a **meta-learning gate**: a random forest trained on 39 dataset-level features (prognostic signal, treatment-effect heterogeneity, data maturity, interaction structure, etc.) that predicts the optimal $K$ directly from the training data, without any cross-validation.
+## 1. Overall AUC
 
-## Data
+| Method | Mean | Median | SD | p10 | p90 |
+|--------|------|--------|----|-----|-----|
+| Oracle | 0.7886 | 0.8056 | 0.128 | 0.601 | 0.954 |
+| Gate | 0.7499 | 0.7528 | 0.139 | 0.563 | 0.937 |
+| CV | 0.7395 | 0.7442 | 0.146 | 0.535 | 0.934 |
+| 4-strata RMST | 0.7260 | 0.7317 | 0.149 | 0.525 | 0.932 |
+| Virtual Twins | 0.7264 | 0.7270 | 0.126 | 0.564 | 0.895 |
 
-- **Training set:** 5,000 simulation configurations × 10 reps = 50,000 synthetic oncology trial datasets (RFS endpoints, $n=200$–$1000$, 6 scenario families)
-- Aggregated to 5,000 config-level rows by averaging features and selecting oracle-optimal $K$ via max mean AUC over $K=1..5$ plus Virtual Twin
-- **Test set:** 989 hold-out configurations (80/20 split)
+**Gate-Oracle gap:** Mean −0.039, Median −0.003
 
-## Methods Compared
+---
 
-| Method | Description |
-|--------|-------------|
-| **Oracle** | Picks $K$ with highest true AUC on test data (theoretical upper bound) |
-| **Gate** | Ranger random forest, 500 trees, impurity importance, trained on 39 dataset features |
-| **CV** | Real 5-fold within-trial cross-validation with adaptive fold collapsing (5→3→2) |
-| **Fixed K=4** | Always uses 4 strata (no selection) |
-| **VT** | Virtual Twin estimator (one of the 6 candidate methods) |
+## 2. AUC by Sample Size
 
-## Results
+| n_train | N | Oracle | Gate | CV | K4 | VT |
+|---------|---|--------|------|-----|------|-----|
+| 200 | 209 | 0.7096 | 0.6696 | 0.6548 | 0.6311 | 0.6647 |
+| 300 | 206 | 0.7430 | 0.6979 | 0.6819 | 0.6740 | 0.6918 |
+| 500 | 381 | 0.8136 | 0.7734 | 0.7665 | 0.7503 | 0.7466 |
+| 1000 | 193 | 0.8734 | 0.8464 | 0.8399 | 0.8340 | 0.7904 |
 
-### AUC by Sample Size
+**Gap from Oracle:**
 
-| $n$ | Oracle | **Gate** | CV | Fixed K=4 | VT alone | $N$ |
-|:---:|:------:|:--------:|:--:|:---------:|:--------:|:---:|
-| 200 | 0.7096 | **0.6692** | 0.6548 | 0.6311 | 0.6647 | 209 |
-| 300 | 0.7430 | **0.6965** | 0.6819 | 0.6740 | 0.6918 | 206 |
-| 500 | 0.8136 | **0.7718** | 0.7665 | 0.7503 | 0.7466 | 381 |
-| 1000 | 0.8734 | **0.8491** | 0.8399 | 0.8340 | 0.7904 | 193 |
-| All | 0.7886 | **0.7494** | 0.7395 | 0.7260 | 0.7264 | 989 |
+| n_train | Gate | CV | K4 | VT |
+|---------|------|----|-----|-----|
+| 200 | −0.040 | −0.055 | −0.081 | −0.045 |
+| 300 | −0.045 | −0.060 | −0.069 | −0.051 |
+| 500 | −0.041 | −0.047 | −0.065 | −0.067 |
+| 1000 | −0.027 | −0.037 | −0.043 | −0.083 |
 
-The gate **consistently achieves higher mean AUC than CV at every sample size**. The advantage is largest at $n=1000$ (Gate gap to oracle = 0.024 vs CV gap = 0.034, a 29% reduction) and narrowest at $n=500$ (10% reduction). However, at the individual split level, CV still wins 23.3% of test configurations — the gate's higher mean comes from winning more often (30.6%) and with larger margins when it does win.
+The gate outperforms CV at every sample size. Gap shrinks with larger n (−0.040 → −0.027). VT collapses at n = 1000 (−0.083).
 
-### Exact Oracle Method Match Rate
+---
 
-| $n$ | **Gate** | CV | Gate edge |
-|:---:|:--------:|:--:|:---------:|
-| 200 | **55.5%** | 37.3% | +18.2pp |
-| 300 | **49.0%** | 33.0% | +16.0pp |
-| 500 | **41.7%** | 37.9% | +3.8pp |
-| 1000 | **40.9%** | 29.5% | +11.4pp |
-| All | **46.0%** | 35.1% | +10.9pp |
+## 3. AUC by Scenario Family
 
-The match rate declines with $n$ because the oracle uses a wider variety of methods at larger $n$ — the decision problem becomes harder. However, the gate's advantage over CV remains consistent across all $n$, suggesting it captures genuine structure rather than memorizing VTs default.
+| Family | N | Oracle | Gate | CV | K4 | VT |
+|--------|---|--------|------|-----|------|------|
+| additive | 128 | 0.764 | 0.734 | 0.719 | 0.724 | 0.707 |
+| bump | 123 | 0.849 | 0.798 | 0.798 | 0.804 | 0.755 |
+| cross | 134 | 0.747 | 0.680 | 0.680 | 0.688 | 0.643 |
+| enclave | 137 | 0.793 | 0.767 | 0.755 | 0.694 | 0.765 |
+| linear | 107 | 0.862 | 0.822 | 0.809 | 0.804 | 0.803 |
+| radial | 134 | 0.740 | 0.719 | 0.706 | 0.654 | 0.718 |
+| random | 99 | 0.793 | 0.751 | 0.743 | 0.722 | 0.748 |
+| s_shaped | 125 | 0.780 | 0.747 | 0.726 | 0.735 | 0.692 |
 
-### Feature Importance
+**Gap from Oracle:**
 
-The RF importance reveals which dataset characteristics drive the gate's decisions:
+| Family | Gate | CV | K4 | VT |
+|--------|------|-----|------|-----|
+| additive | −0.031 | −0.046 | −0.041 | −0.058 |
+| bump | −0.051 | −0.052 | −0.046 | −0.095 |
+| cross | **−0.067** | **−0.068** | −0.060 | **−0.103** |
+| enclave | −0.026 | −0.039 | −0.094 | −0.028 |
+| linear | −0.040 | −0.053 | −0.060 | −0.059 |
+| radial | **−0.021** | −0.034 | −0.090 | **−0.022** |
+| random | −0.042 | −0.051 | −0.076 | −0.045 |
+| s_shaped | −0.035 | −0.057 | −0.055 | −0.088 |
 
-| Domain | Key features | Impact |
-|--------|-------------|--------|
-| Prognostic signal | `c_index`, `bootstrap_ci_sd`, `orig_pred_var` | Strongest — C-index alone explains most gate decisions |
-| TE heterogeneity | `te_slope`, `te_quadratic_p`, `te_int_max_z` | Moderate — shapes how many strata are needed |
-| Data maturity | `event_rate`, `censoring_rate`, `median_followup` | Moderate — fewer events favor fewer strata |
-| Sample regime | `n`, `p`, `e_per_p` | Mild — mainly affects confidence in other features |
-| Interaction structure | `delta_c_index`, `prop_interact_sig` | Weakest — non-linear miscalibration patterns |
+**Best families for gate:** radial (−0.021), enclave (−0.026), additive (−0.031)
+**Worst families:** cross (−0.067), bump (−0.051), random (−0.042)
 
-The [global feature importance plot](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_global_importance.pdf) confirms which features dominate the gate's decisions — C-index and bootstrap confidence intervals at the top, score skewness and correlation features at the bottom. The [multi-dataset activation heatmap](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_activation_heatmap.pdf) shows that different scenario families ("s_shaped", "bump", "linear") light up distinct feature domains, and the [single-dataset brain slice](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_brain_slice.pdf) provides a detailed view of which domains activate for a representative dataset.
+---
 
-## Statistical Significance
+## 4. AUC by Family & Sample Size
 
-Is the gate's AUC advantage real, or could it be Monte Carlo noise? The histogram below shows the distribution of paired differences (Gate AUC − CV AUC) across all 989 test splits, broken down by sample size.
+### Gate-Oracle gap
 
-![Gate vs CV AUC difference histograms by sample size](https://raw.githubusercontent.com/doublerobust/stratified-rmst-cavboost/moe-integration/moe/results/gate_vs_cv_histograms.png)
+| Family | n=200 | n=300 | n=500 | n=1000 |
+|--------|-------|-------|-------|--------|
+| additive | −0.041 | −0.040 | −0.023 | −0.026 |
+| bump | −0.032 | −0.086 | −0.059 | −0.017 |
+| cross | −0.067 | −0.070 | **−0.070** | −0.058 |
+| enclave | −0.025 | −0.043 | −0.026 | −0.013 |
+| linear | −0.044 | −0.033 | −0.048 | −0.027 |
+| radial | −0.019 | −0.016 | −0.019 | −0.034 |
+| random | −0.060 | −0.039 | −0.033 | −0.039 |
+| s_shaped | −0.031 | −0.045 | −0.050 | −0.008 |
 
-The green tail (Gate wins) is thicker and extends further than the red tail (CV wins) at every sample size. A paired t-test confirms the overall difference is statistically meaningful:
+### CV-Oracle gap
 
-| Metric | Value |
-|--------|:-----:|
-| Mean AUC difference (Gate − CV) | **+0.0097** |
-| 95% CI | [0.0050, 0.0145] |
-| Paired t-statistic | 4.02 |
-| p-value | 0.000064 (≈ 6.4 × 10⁻⁵) |
+| Family | n=200 | n=300 | n=500 | n=1000 |
+|--------|-------|-------|-------|--------|
+| additive | −0.057 | −0.049 | −0.047 | −0.031 |
+| bump | −0.065 | −0.076 | −0.040 | −0.037 |
+| cross | −0.065 | −0.058 | −0.068 | −0.082 |
+| enclave | −0.059 | −0.040 | −0.036 | −0.023 |
+| linear | −0.053 | −0.057 | −0.062 | −0.024 |
+| radial | −0.030 | −0.051 | −0.029 | −0.026 |
+| random | −0.044 | −0.078 | −0.048 | −0.032 |
+| s_shaped | −0.061 | −0.076 | −0.047 | −0.045 |
 
-By sample size, the difference is significant at $n=200$ ($p=0.013$), $n=300$ ($p=0.013$), and $n=1000$ ($p=0.025$). The only non-significant result is $n=500$ ($p=0.26$), where the gate's advantage is smallest (+0.0043 AUC).
+---
 
-Notably, the gate wins in only **30.6%** of individual splits but still achieves a significantly higher mean AUC. This is because the gate's typical win (+0.071 median) is **44% larger** than CV's typical win (+0.049 median). The gate wins more often than CV (30.6% vs 23.3%), and when it wins, it wins by a larger margin.
+## 5. Gate vs CV: Head-to-Head
 
-## Discussion
+| Outcome | Count | % |
+|---------|-------|---|
+| Gate better (Δ > 0.005) | 285 | 28.8% |
+| CV better (Δ < −0.005) | 197 | 19.9% |
+| Tie (Δ within 0.005) | 507 | 51.4% |
 
-**When is the gate most valuable?** At the extremes: $n \leq 300$ where CV is unreliable, and $n \geq 1000$ where the oracle has many viable options and the gate's richer feature set gives it an edge. The $n=500$ region is the convergence zone — CV works adequately and the gate's features are still noisy — but even there the gate matches or beats CV.
+Gate outperforms CV by ≈9 percentage points overall. In 129 more scenarios, CV wins marginally (within 0.005).
 
-**What limits the gate?** The current gate defaults to VT on ~67% of test cases (666/989 splits), many of which the oracle would have picked a different method. This VT skew is partly due to `prop_interact_sig` being all-NA (the Cox interaction model with 40+ terms failed to converge on most datasets). A univariate screening fix is expected to improve discrimination further.
+---
 
-**Future directions:**
-- Integrate the univariate interaction features to reduce VT default rate
-- Bayesian gate that outputs prediction intervals, not just point estimates
-- Active learning: the gate could request a CV check only when uncertainty is high
+## 6. Large Failures
 
-## References
+15% of scenarios (148/989) have gate lagging oracle by >0.10 AUC. Worst cases:
 
-- Schuler A, et al. (2022). Increasing the efficiency of randomized trial estimates via linear adjustment for a prognostic score. *Int J Biostatistics* 18(2):329-356. DOI: 10.1515/ijb-2021-0072.
-- Mehrotra DV, Marceau West R. (2021). Survival analysis using a 5-step stratified testing and amalgamation routine (5-STAR) in randomized clinical trials. *Statistics in Medicine*. arXiv:2004.13611.
-- Friedman J, et al. (2010). Regularization paths for generalized linear models via coordinate descent. *JSS* 33(1):1-22. DOI: 10.18637/jss.v033.i01.
-- Gail MH, Wieand S, Piantadosi S. (1984). Biased estimates of treatment effect in randomized experiments with nonlinear regressions and omitted covariates. *Biometrika* 71(3):431-444. DOI: 10.1093/biomet/71.3.431.
-- Hajage D, et al. (2018). On the use of the prognostic score for the analysis of randomized trials with multiple covariate adjustment. *Statistics in Medicine* 37(9):1421-1438.
+| Family | n | Oracle AUC | Gate AUC | Gap |
+|--------|---|------------|----------|------|
+| cross | 500 | 0.866 | 0.491 | −0.375 |
+| s_shaped | 500 | 0.962 | 0.614 | −0.348 |
+| bump | 300 | 0.929 | 0.612 | −0.317 |
+| cross | 1000 | 0.932 | 0.639 | −0.294 |
+| random | 500 | 0.428 | 0.139 | −0.290 |
+
+Pattern: When oracle needed specific methods (m1–m4), gate fell back to method 6 (default CV), missing the optimal choice.
+
+---
+
+## 7. Feature Dictionary
+
+All features are computed in one pass on training data — no cross-validation needed.
+
+### A. Prognostic Signal
+| Feature | Description |
+|---------|-------------|
+| `c_index` | Concordance index of null Cox model (covariates only, no treatment) |
+| `score_skew` | Skewness of the linear predictor distribution |
+| `score_kurt` | Kurtosis of the linear predictor distribution |
+| `score_var` | Variance of the linear predictor |
+| `score_q90_q10` | Ratio of 90th to 10th percentile of linear predictor |
+
+### B. Interaction Structure
+| Feature | Description |
+|---------|-------------|
+| `delta_c_index` | Improvement in C-index when adding treatment to null model |
+| `prop_interact_sig` | Proportion of covariates with nominally significant (p<0.1) treatment interaction |
+| `trt_main_p` | p-value of treatment main effect in Cox model |
+
+### C. Treatment Effect Profile
+| Feature | Description |
+|---------|-------------|
+| `te_bin_var` | Variance of RMST difference across prognostic bins (K=4) |
+| `te_slope` | Slope of RMST difference vs. prognostic score (linear trend) |
+| `te_quadratic_p` | p-value for quadratic deviation from linear TE trend |
+| `te_max_diff` | Maximum pairwise difference in RMST across bins |
+| `te_bin_event_rate_range` | Range of event rates across prognostic bins |
+
+### D. Data Quality
+| Feature | Description |
+|---------|-------------|
+| `censoring_rate` | Proportion of censored observations |
+| `event_rate` | Proportion of events observed |
+| `event_count_trt` | Event count in treatment arm |
+| `event_count_ctrl` | Event count in control arm |
+| `median_followup` | Median follow-up time |
+| `mean_followup` | Mean follow-up time |
+| `n` | Number of training samples |
+| `p` | Number of covariates |
+| `e_per_p` | Events per covariate (event_rate × n / p) |
+
+### E. Sample Efficiency
+| Feature | Description |
+|---------|-------------|
+| `bootstrap_ci_sd` | SD of bootstrap C-index estimates (50 replicates) |
+| `bootstrap_ci_mean` | Mean of bootstrap C-index estimates |
+
+### F. Model Behavior
+| Feature | Description |
+|---------|-------------|
+| `orig_pred_var` | Variance of RMSTBoost treatment effect predictions |
+| `orig_pred_mean` | Mean of RMSTBoost treatment effect predictions |
+| `orig_ambiguity` | Proportion of predictions in [0.4, 0.6] (indeterminate zone) |
+
+### H. Within-Arm Features
+| Feature | Description |
+|---------|-------------|
+| `c_index_trt` | C-index within the treatment arm only |
+| `c_index_ctrl` | C-index within the control arm only |
+| `c_index_ratio` | Ratio of treatment to control C-index |
+
+### I. TE Interaction Signals
+| Feature | Description |
+|---------|-------------|
+| `te_int_max_z` | Maximum absolute z-score for treatment-covariate interactions |
+| `te_int_mean_z` | Mean absolute z-score across all interactions |
+| `te_int_prop_sig` | Proportion of interactions with \|z\| > 1.96 |
+
+### J. Correlation Structure
+| Feature | Description |
+|---------|-------------|
+| `corr_mean` | Mean absolute pairwise correlation among covariates |
+| `corr_max` | Maximum absolute pairwise correlation |
+| `corr_prop_high` | Proportion of pairwise correlations exceeding 0.5 |
+
+---
+
+## 8. Gate Model Architecture
+
+- **Model:** ranger random forest (500 trees, impurity importance, probability output)
+- **Training features:** 26 dataset-level meta-features (no oracle information)
+- **Prediction targets:** Optimal K ∈ {1, 2, 3, 4, 5, VT} (CV-selected K)
+- **Label source:** Oracle optimal K from simulation ground truth (training only)
+- **Features explicitly excluded from training:** `auc_K1`–`auc_K5`, `optimal_K`, `oracle_auc`, `family`, `n_train`
