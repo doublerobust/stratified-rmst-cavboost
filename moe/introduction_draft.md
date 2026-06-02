@@ -1,18 +1,18 @@
-# When Cross-Validation Fails: Pre-Trained Meta-Learning for Structural Decisions in Small-Sample Settings
+# Pre-Trained Meta-Learning for Zero-shot Structural Decisions in Statistical Modeling: A Robust Alternative to Cross Validation
 
 ## 1. Introduction
 
-### 1.1 The Failure of Cross-Validation at Small Sample Sizes
+### 1.1 The Limitation of Cross-Validation at Small Sample Sizes
 
-Cross-validation is the workhorse of model selection. It estimates out-of-sample performance using within-sample data, and for large samples it works well. But in the small-sample regime that characterizes early-phase clinical trials, genomic studies, and many biomedical settings — where n = 200–500 — cross-validation has a fundamental limitation: the standard error of a cross-validated performance estimate is comparable to or larger than the true performance difference between competing methods [Kohavi, 1995; Bengio & Grandvalet, 2004; Varma & Simon, 2006; Hastie et al., 2009, §7.10].
+Cross-validation is the workhorse of model selection. It estimates out-of-sample performance using within-sample data, and for large samples it works well. But in the small-sample regime that characterizes many clinical trials, genomic studies, and biomedical settings — where n = 200–500 — cross-validation has a fundamental limitation: the standard error of a cross-validated performance estimate is comparable to or larger than the true performance difference between competing methods [Kohavi, 1995; Bengio & Grandvalet, 2004; Varma & Simon, 2006; Hastie et al., 2009, §7.10].
 
 This problem is not restricted to any particular modeling task. It affects hyperparameter tuning (how many trees? which shrinkage rate?), model class selection (boosting vs. random forest vs. neural net?), and structural decisions (should we stratify? what cutpoint?). In all these cases, the practitioner must make a choice based on data that is too sparse to inform it reliably. Cross-validation, applied to a single dataset, cannot see the forest for the trees: it has no access to information from other datasets, other trials, or other studies that faced similar structural decisions.
 
 ### 1.2 A Pre-Training Alternative
 
-We propose a fundamentally different approach. Instead of relying on per-dataset cross-validation, we pre-train a meta-model — a "gate" — on thousands of synthetic datasets that collectively span the range of structural scenarios a practitioner might encounter. This gate learns to map dataset-level summary statistics (the "landmarking" features familiar from the meta-learning literature) to optimal structural decisions. Once pre-trained, the gate applies to a new dataset in a single forward pass: compute a small set of summary statistics (a few seconds of computation), feed them through the frozen gate, and obtain a recommendation.
+We investigate a fundamentally different approach. Instead of relying on per-dataset cross-validation, we pre-train a meta-model — a "gate" — on thousands of synthetic datasets that collectively span the range of structural scenarios a practitioner might encounter. This gate learns to map dataset-level summary statistics (the "landmarking" features familiar from the meta-learning literature) to optimal structural decisions. Once pre-trained, the gate applies to a new dataset in a single forward pass: compute a small set of summary statistics (a few seconds of computation), feed them through the frozen gate, and obtain a recommendation.
 
-This is, in spirit, what foundation models do: pre-train on a broad distribution, transfer zero-shot to new instances. Our scale is smaller — thousands of synthetic datasets rather than billions of tokens — but the principle is the same. The critical difference is that our pre-training is performed on *interpretable meta-features*, not raw covariates. When the gate recommends a particular decision, it does so because the dataset's prognostic strength, interaction signal, and sample size resemble those of other datasets where that decision was optimal.
+This is, in spirit, what foundation models do: pre-train on a broad distribution, transfer zero-shot to new instances. The scale in our investigation is smaller — thousands of synthetic datasets rather than billions of tokens — but the principle is the same. The critical difference is that our pre-training is performed on *interpretable meta-features*, not raw covariates. When the gate recommends a particular decision, it does so because the dataset's prognostic strength, interaction signal, and sample size resemble those of other datasets where that decision was optimal.
 
 ### 1.3 The Worked Example: Adaptive Stratification for RMST Boosting
 
