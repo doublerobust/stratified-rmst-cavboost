@@ -66,8 +66,9 @@ df <- read.csv(DATA_PATH, stringsAsFactors = FALSE)
 cat(sprintf("Loaded: %d rows x %d cols\n", nrow(df), ncol(df)))
 
 # Columns to exclude from features
-exclude_cols <- c("seed", "family", "n_train", "cfg_prognostic_form",
-                  "optimal_method", "auc_K1", "auc_K2", "auc_K3", "auc_K4", "auc_K5", "auc_VT")
+exclude_cols <- c("seed", "family", "n_train", "optimal_method",
+                  "auc_K1", "auc_K2", "auc_K3", "auc_K4", "auc_K5", "auc_VT",
+                  grep("^cfg_", names(df), value = TRUE))
 exclude_cols <- intersect(exclude_cols, names(df))
 
 feature_cols <- setdiff(names(df), exclude_cols)

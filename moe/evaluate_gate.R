@@ -50,7 +50,7 @@ d <- fread("moe/results/gate_training_data.csv")
 
 exclude_cols <- c("seed","family","n_train","optimal_K","optimal_method","oracle_rate",
   "auc_K1","auc_K2","auc_K3","auc_K4","auc_K5","auc_VT",
-  "cfg_prognostic_form","cfg_te_start","cfg_te_peak","cfg_te_decay",
+  grep("^cfg_", names(d), value = TRUE),
   grep("^K[1-5]_", names(d), value = TRUE))
 # Also exclude any non-numeric columns that slipped through
 feat_cols <- setdiff(names(d), exclude_cols)
