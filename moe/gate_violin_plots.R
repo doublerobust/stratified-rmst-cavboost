@@ -31,7 +31,8 @@ p1 <- ggplot(dt[!is.na(auc)], aes(x = method, y = auc, fill = method)) +
   geom_boxplot(width = 0.15, fill = "white", alpha = 0.5, outlier.size = 0.5) +
   facet_wrap(~ n_train, ncol = 4, labeller = label_both) +
   scale_fill_manual(values = c("Gate" = "#4682B4", "CV" = "#CD5C5C")) +
-  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  scale_y_continuous(breaks = seq(0, 1, 0.2)) +
+  coord_cartesian(ylim = c(0.1, 1.0)) +
   labs(title = "Gate vs Cross-Validation AUC Distribution by Sample Size",
        subtitle = paste0("989 scenarios · Gate beats CV 28.8% vs 19.9%, 51.4% ties"),
        y = "AUC", x = NULL) +
