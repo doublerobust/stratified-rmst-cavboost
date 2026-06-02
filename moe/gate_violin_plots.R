@@ -27,7 +27,7 @@ n_labels[, label := paste0("n = ", n_train, "\n(N = ", N, ")")]
 
 # === Plot 1: Gate vs CV by sample size ===
 p1 <- ggplot(dt[!is.na(auc)], aes(x = method, y = auc, fill = method)) +
-  geom_violin(trim = FALSE, bw = 0.04, alpha = 0.6) +
+  geom_violin(trim = TRUE, bw = 0.04, alpha = 0.6) +
   geom_boxplot(width = 0.15, fill = "white", alpha = 0.5, outlier.size = 0.5) +
   facet_wrap(~ n_train, ncol = 4, labeller = label_both) +
   scale_fill_manual(values = c("Gate" = "#4682B4", "CV" = "#CD5C5C")) +
