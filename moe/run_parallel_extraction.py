@@ -60,11 +60,10 @@ def run_chunk(chunk_idx: int, chunk_file: str, log_dir: str) -> subprocess.Popen
     log_file = os.path.join(log_dir, f"extract_chunk_{chunk_idx}.log")
     log_fh = open(log_file, "w")
     
-    # Source the extract script directly — it auto-detects chunk mode from commandArgs
+    # Run extract_gate_data.R in chunk mode — it auto-detects from commandArgs
     r_script = f'source("{EXTRACT_SCRIPT}")'
-
     proc = subprocess.Popen(
-        ["Rscript", "-e", r_script, chunk_file, str(chunk_idx)],
+        ["Rscript", EXTRACT_SCRIPT, chunk_file, str(chunk_idx)],
         stdout=log_fh,
         stderr=subprocess.STDOUT,
     )

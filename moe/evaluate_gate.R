@@ -64,8 +64,20 @@ X[!is.finite(X)] <- 0
 y <- d$optimal_method
 
 # ---- Train/test split ----
+# Split at CONFIG level (not row level) to prevent leakage from
+# per-rep data where multiple reps of the same config share a label
 set.seed(20260530)
-n <- nrow(X); idx <- sample(n, round(0.8 * n))
+if (length(unique(paste0(d$family, d$n_train))) < nrow(d)) {
+  # Per-rep data: group rows by config before splitting
+  config_id <- rleidv(d[, c("family", "n_train")])
+  unique_configs <- unique(config_id)
+  n_configs <- length(unique_configs)
+  train_configs <- sample(unique_configs, round(0.8 * n_configs))
+  idx <- which(config_id %in% train_configs)
+} else {
+  # One row per config: simple row-level split is fine
+  idx <- sample(nrow(X), round(0.8 * nrow(X)))
+}
 X_tr <- X[idx,]; y_tr <- y[idx]
 X_te <- X[-idx,]; y_te <- y[-idx]
 cat(sprintf("  Train: %d, Test: %d\n", length(y_tr), length(y_te)))
