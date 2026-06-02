@@ -379,9 +379,9 @@ compute_gate_features <- function(data, tau = 30, fit_orig = NULL, model_preds =
     # J. Correlation
     .extract_correlation_features(data),
     
-    # n and p explicitly
-    n = nrow(data),
-    p = length(setdiff(names(data), c("trt01p", "time", "status")))
+    # n and p explicitly (duplicate-safe: .extract_quality_features also returns these)
+    tot_n = nrow(data),
+    tot_p = length(setdiff(names(data), c("trt01p", "time", "status")))
   )
   
   # F. Model behavior (if provided)

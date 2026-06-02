@@ -45,6 +45,10 @@ for (f in files) {
     auc_VT = if (length(r$aucs) >= 6) r$aucs[6] else NA
   )
   for (nm in FEATURES) {
+    if (!nm %in% names(r$features)) {
+      row[[nm]] <- NA_real_
+      next
+    }
     v <- r$features[[nm]]
     row[[nm]] <- if (is.null(v) || length(v) != 1) NA_real_ else v
   }

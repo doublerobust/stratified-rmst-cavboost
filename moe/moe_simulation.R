@@ -21,7 +21,7 @@ if (!exists("PARALLEL")) PARALLEL <- TRUE
 N_TOTAL <- N_CONFIGS * N_REPS
 TAU <- 30
 SEED_BASE <- 20260601
-NR <- 30  # boosting iterations
+NR <- 10  # boosting iterations
 NTHREAD <- 2  # XGBoost threads per worker (N_WORKERS * NTHREAD <= total cores)
 
 # Use the directory containing this script as the base
