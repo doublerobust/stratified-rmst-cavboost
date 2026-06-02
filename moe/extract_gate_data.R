@@ -111,7 +111,7 @@ if (!CHUNK_MODE && "config_idx" %in% names(df)) {
   
   auc_cols <- c("auc_K1", "auc_K2", "auc_K3", "auc_K4", "auc_K5", "auc_VT")
   exclude_from_avg <- c("config_idx", "seed", "family", "n_train",
-    "auc_cols", "cfg_prognostic_form", "cfg_te_start", "cfg_te_peak", "cfg_te_decay")
+    auc_cols, "cfg_prognostic_form", "cfg_te_start", "cfg_te_peak", "cfg_te_decay")
   feat_cols <- setdiff(names(df), exclude_from_avg)
   is_num <- sapply(df[, ..feat_cols], is.numeric)
   feat_cols <- feat_cols[is_num]
@@ -136,17 +136,15 @@ if (!CHUNK_MODE && "config_idx" %in% names(df)) {
   # Keep a reference seed
   first_seeds <- df[, .(seed = seed[1]), by = config_idx]
   agg <- merge(agg, first_seeds, by = "config_idx")
-  agg[, config_idx := NULL]
   
   if (PER_REP) {
-    # Keep per-rep rows but add config-level oracle label
-    df <- merge(df, agg[, .(config_idx = unique(df$config_idx),
-                            optimal_method = agg$optimal_method),
-                        by = config_idx], by = "config_idx")
-    # Keep all per-rep columns
+    # Keep per-rep rows, add config-level oracle label
+    optimal_by_config <- agg[, .(config_idx, optimal_method)]
+    df <- merge(df, optimal_by_config, by = "config_idx")
     df[, config_idx := NULL]
     fwrite(df, out_csv)
   } else {
+    agg[, config_idx := NULL]
     df <- agg
     fwrite(df, out_csv)
   }
