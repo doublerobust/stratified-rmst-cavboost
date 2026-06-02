@@ -29,9 +29,7 @@ Our results show that the pre-trained gate outperforms per-dataset 5-fold cross-
 
 ### 1.4 The Larger Thesis
 
-The stratified RMST example is a demonstration, not the destination. The meta-learning framework we describe — (a) identify a structural decision that CV handles poorly at small n, (b) generate a broad simulation corpus that covers the decision's input space, (c) pre-train a gate on interpretable dataset-level features, (d) deploy zero-shot — applies across statistical modeling. Any setting where cross-validation for model selection is unreliable at realistic sample sizes is a candidate.
-
-We are not proposing a new method for stratification, nor a new approach to subgroup identification. We are proposing a new paradigm for how structural decisions can be made in data-poor environments: by leveraging information from synthetic data that mimics the breadth of real-world scenarios, summarized into interpretable meta-features that a gate can learn from.
+The stratified RMST example is a demonstration, not the destination. The meta-learning framework applies broadly: identify a structural decision that CV handles poorly at small n, generate a simulation corpus spanning the decision's input space, pre-train a gate on interpretable meta-features, and deploy zero-shot. Any setting where cross-validation for model selection is unreliable at realistic sample sizes is a candidate.
 
 ### 1.5 Contributions
 
