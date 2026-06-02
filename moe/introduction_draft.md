@@ -14,11 +14,16 @@ We investigate a fundamentally different approach. Instead of relying on per-dat
 
 This is, in spirit, what foundation models do: pre-train on a broad distribution, transfer zero-shot to new instances. The scale in our investigation is smaller — thousands of synthetic datasets rather than billions of tokens — but the principle is the same. The critical difference is that our pre-training is performed on *interpretable meta-features*, not raw covariates. When the gate recommends a particular decision, it does so because the dataset's prognostic strength, interaction signal, and sample size resemble those of other datasets where that decision was optimal.
 
-### 1.3 The Worked Example: Adaptive Stratification for RMST Boosting
+### 1.3 The Worked Example: Selecting a Subgroup Identification Method
 
-We instantiate this framework with a concrete example: selecting the number of prognostic strata K for stratified RMST value-function-guided boosting in time-to-event subgroup identification.
+We instantiate this framework with a concrete example: selecting among six competing methods for time-to-event subgroup identification. The candidate methods are:
 
-The problem is well-suited for several reasons. First, a single tuning parameter K controls the bias-variance tradeoff — too few strata leaves prognostic confounding unaddressed, too many fragments the data into uninformative groups — and the optimal K depends on observable data properties. Second, the cost of a suboptimal choice is bounded: K = 3 when K = 4 was optimal is a small efficiency loss, not a methodological disaster. Third, the decision is simple enough that the gate's behavior can be fully interrogated.
+* **Stratified RMST boosting with K = 1 through 5 strata** (five variants differing in how coarsely or finely the prognostic score is partitioned), and
+* **Virtual Twins** (a random-survival-forest-based approach that directly models the treatment-covariate interaction).
+
+Each of the six candidates occupies a different point on the bias-variance spectrum. Low-K stratification (K = 1, i.e., no stratification) is simple and stable but may leave prognostic confounding unaddressed. Higher K values refine the subgroup boundary at the cost of estimating treatment effects within smaller strata. Virtual Twins is the most flexible — modeling interactions nonparametrically — but is also the most data-demanding and can overfit severely at small sample sizes.
+
+A practitioner facing this choice must weigh these tradeoffs using the data at hand. Cross-validation would estimate each candidate's performance on held-out folds, but as argued above, those estimates are too noisy to distinguish among methods when n = 200–500. The gate resolves this by leveraging meta-features — dataset-level summary statistics computed from the training data alone — to predict which candidate will perform best.
 
 Our results show that the pre-trained gate outperforms per-dataset 5-fold cross-validation across all sample sizes. At n = 200, the gate achieves a mean AUC of 0.670 versus 0.655 for CV — a 1.5-point improvement. At n = 300, the gap is 1.6 points (0.698 vs. 0.682). At n = 500 and n = 1000, the gap narrows to 0.7 points (0.773 vs. 0.767 and 0.846 vs. 0.840, respectively). In head-to-head comparisons, the gate beats CV in 28.8% of scenarios versus 19.9% for CV, with 51.4% ties — a 9-percentage-point advantage. The gate uses 26 interpretable dataset-level features, with the prognostic C-index, the bootstrap stability of that estimate, and the quadratic deviation of the treatment-effect profile emerging as the most informative predictors.
 
@@ -32,7 +37,7 @@ We are not proposing a new method for stratification, nor a new approach to subg
 
 1. **A meta-learning framework for structural decisions**: We formalize the problem of replacing per-dataset cross-validation with a pre-trained gate operating on dataset-level meta-features.
 
-2. **A worked example via stratified RMST boosting**: We demonstrate the framework on the concrete problem of selecting the number of prognostic strata, showing that the gate outperforms cross-validation at small n.
+2. **A worked example via method selection for subgroup identification**: We demonstrate the framework on the concrete problem of selecting among six candidate methods (K = 1–5 stratified RMST boosting and Virtual Twins), showing that the gate outperforms cross-validation at small n.
 
 3. **A landmarking feature library for survival data**: Twenty-six interpretable features covering prognostic signal, interaction structure, treatment-effect profile, and data quality.
 
