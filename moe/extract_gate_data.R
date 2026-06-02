@@ -52,10 +52,7 @@ CONFIG_FEATURES <- c("n_predictive", "n_prognostic", "te_scale", "overlap", "b0"
   "prognostic_form", "corr")
 
 # NEW_FEATURE names for fallback computation (when missing from RDS)
-NEW_FEATURE_NAMES <- c("c_index_trt", "c_index_ctrl", "c_index_ratio",
-  "te_int_max_z", "te_int_mean_z", "te_int_prop_sig",
-  "corr_mean", "corr_max", "corr_prop_high",
-  "prop_interact_sig", "trt_main_p", "trt_main_p.trt01p")
+
 # ── Extract one file ────────────────────────────────────
 extract_one <- function(f) {
   r <- readRDS(f)
@@ -80,27 +77,6 @@ extract_one <- function(f) {
   for (nm in CONFIG_FEATURES) {
     v <- r$config[[nm]]
     row[[paste0("cfg_", nm)]] <- if (is.null(v) || length(v) != 1) NA_real_ else v
-  }
-  
-  # NEW_FEATURES fallback: compute from raw data only if missing from RDS
-  # (newer RDS files already have these in r$features from compute_gate_features)
-  missing_new <- NEW_FEATURE_NAMES[vapply(NEW_FEATURE_NAMES, function(nm) isTRUE(is.na(row[[nm]])), logical(1))]
-  if (length(missing_new) > 0) {
-    raw_path <- file.path(RAW, sprintf("%s_%d.rds", r$config$family, r$seed))
-    if (file.exists(raw_path)) {
-      d_raw <- readRDS(raw_path)
-      train_raw <- d_raw$train
-      if (!is.null(train_raw) && nrow(train_raw) > 20) {
-        all_new_feats <- tryCatch(c(
-          .extract_within_arm_features(train_raw),
-          .extract_interaction_features(train_raw),
-          .extract_te_interaction_features(train_raw),
-          .extract_correlation_features(train_raw)
-        ), error = function(e)
-          structure(rep(NA, length(NEW_FEATURE_NAMES)), names = NEW_FEATURE_NAMES))
-        for (nm in missing_new) row[[nm]] <- all_new_feats[[nm]]
-      }
-    }
   }
   
   row
