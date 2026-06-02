@@ -34,7 +34,7 @@ We propose a **meta-learning gate**: a random forest trained on 39 dataset-level
 | 1000 | 0.8734 | **0.8491** | 0.8399 | 0.8340 | 0.7904 | 193 |
 | All | 0.7886 | **0.7494** | 0.7395 | 0.7260 | 0.7264 | 989 |
 
-The gate **consistently outperforms CV at every sample size**. The advantage is largest at $n=1000$ (Gate gap to oracle = 0.024 vs CV gap = 0.034, a 29% reduction) and narrowest at $n=500$ (10% reduction). Critically, the gate **never underperforms CV** — even at $n=200$ where CV is most unstable, the gate maintains a 0.014 AUC advantage.
+The gate **consistently achieves higher mean AUC than CV at every sample size**. The advantage is largest at $n=1000$ (Gate gap to oracle = 0.024 vs CV gap = 0.034, a 29% reduction) and narrowest at $n=500$ (10% reduction). However, at the individual split level, CV still wins 23.3% of test configurations — the gate's higher mean comes from winning more often (30.6%) and with larger margins when it does win.
 
 ### Exact Oracle Method Match Rate
 
@@ -85,7 +85,7 @@ Notably, the gate wins in only **30.6%** of individual splits but still achieves
 
 **When is the gate most valuable?** At the extremes: $n \leq 300$ where CV is unreliable, and $n \geq 1000$ where the oracle has many viable options and the gate's richer feature set gives it an edge. The $n=500$ region is the convergence zone — CV works adequately and the gate's features are still noisy — but even there the gate matches or beats CV.
 
-**What limits the gate?** The current gate defaults to VT on ~16% of test cases where the feature profile is ambiguous. This VT skew is partly due to `prop_interact_sig` being all-NA (the Cox interaction model with 40+ terms failed to converge on most datasets). A univariate screening fix is expected to improve discrimination further.
+**What limits the gate?** The current gate defaults to VT on ~67% of test cases (666/989 splits), many of which the oracle would have picked a different method. This VT skew is partly due to `prop_interact_sig` being all-NA (the Cox interaction model with 40+ terms failed to converge on most datasets). A univariate screening fix is expected to improve discrimination further.
 
 **Future directions:**
 - Integrate the univariate interaction features to reduce VT default rate
