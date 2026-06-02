@@ -9,7 +9,7 @@
 #
 # This script:
 # 1. Reads gate training data (features + oracle optimal K)
-# 2. Trains LASSO gate on 80% of data
+# 2. Trains ranger RF gate on 80% of data
 # 3. For each test rep, runs real 5-fold CV over K=1..5
 # 4. Compares: gate AUC vs CV AUC vs fixed K=4
 

@@ -38,7 +38,7 @@ We are not proposing a new method for stratification, nor a new approach to subg
 
 4. **Empirical evidence for the small-n regime**: The gate beats CV by 8 AUC points at n = 200, with convergence by n = 1000.
 
-5. **Interpretability**: The LASSO-selected gate retains 15 features, providing insight into which data properties drive optimal structural decisions.
+5. **Interpretability**: The random forest gate uses impurity importance across all features, providing insight into which data properties drive optimal structural decisions.
 
 ### 1.6 Organization
 

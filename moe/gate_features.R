@@ -1,7 +1,7 @@
 #' Gate features: extract dataset-level summary statistics from training data
 #' 
 #' All features are computed in one pass on the training data — no CV needed.
-#' These ~40 features feed into the LASSO gate that predicts optimal K.
+#' These ~40 features feed into the random forest gate that predicts optimal K.
 
 library(survival)
 library(glmnet)
