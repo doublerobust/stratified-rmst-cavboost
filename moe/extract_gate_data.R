@@ -43,7 +43,7 @@ FEATURES <- c("c_index","score_skew","score_kurt","score_var","score_q90_q10",
   "e_per_p","bootstrap_ci_sd","bootstrap_ci_mean","orig_pred_var","orig_pred_mean","orig_ambiguity")
 
 CONFIG_FEATURES <- c("n_predictive", "n_prognostic", "te_scale", "overlap", "b0",
-  "prognostic_form", "corr", "te_start", "te_peak", "te_decay")
+  "prognostic_form", "corr")
 
 NEW_FEATURES <- c("c_index_trt", "c_index_ctrl", "c_index_ratio",
   "te_int_max_z", "te_int_mean_z", "te_int_prop_sig",
@@ -111,7 +111,7 @@ if (!CHUNK_MODE && "config_idx" %in% names(df)) {
   
   auc_cols <- c("auc_K1", "auc_K2", "auc_K3", "auc_K4", "auc_K5", "auc_VT")
   exclude_from_avg <- c("config_idx", "seed", "family", "n_train",
-    auc_cols, "cfg_prognostic_form", "cfg_te_start", "cfg_te_peak", "cfg_te_decay")
+    auc_cols, "cfg_prognostic_form")
   feat_cols <- setdiff(names(df), exclude_from_avg)
   is_num <- sapply(df[, ..feat_cols], is.numeric)
   feat_cols <- feat_cols[is_num]
