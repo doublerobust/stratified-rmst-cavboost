@@ -46,7 +46,7 @@ FEATURES <- c("c_index","score_skew","score_kurt","score_var","score_q90_q10",
   "c_index_trt","c_index_ctrl","c_index_ratio",
   "te_int_max_z","te_int_mean_z","te_int_prop_sig",
   "corr_mean","corr_max","corr_prop_high",
-  "prop_interact_sig","trt_main_p")
+  "prop_interact_sig","trt_main_p","trt_main_p.trt01p")
 
 CONFIG_FEATURES <- c("n_predictive", "n_prognostic", "te_scale", "overlap", "b0",
   "prognostic_form", "corr")
@@ -84,7 +84,7 @@ extract_one <- function(f) {
   
   # NEW_FEATURES fallback: compute from raw data only if missing from RDS
   # (newer RDS files already have these in r$features from compute_gate_features)
-  missing_new <- NEW_FEATURE_NAMES[sapply(NEW_FEATURE_NAMES, function(nm) is.na(row[[nm]]))]
+  missing_new <- NEW_FEATURE_NAMES[vapply(NEW_FEATURE_NAMES, function(nm) isTRUE(is.na(row[[nm]])), logical(1))]
   if (length(missing_new) > 0) {
     raw_path <- file.path(RAW, sprintf("%s_%d.rds", r$config$family, r$seed))
     if (file.exists(raw_path)) {
