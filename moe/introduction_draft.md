@@ -1,4 +1,4 @@
-# Pre-Trained Meta-Learning for Zero-shot Structural Decisions in Statistical Modeling: A Robust Alternative to Cross Validation
+# Pre-Trained Meta-Learning for Zero-shot Mixture-of-Experts Decisions in Statistical Modeling: A Robust Alternative to Cross Validation
 
 ## 1. Introduction
 
@@ -29,7 +29,7 @@ Our results show that the pre-trained gate outperforms per-dataset 5-fold cross-
 
 ### 1.4 The Larger Thesis
 
-The stratified RMST example is a demonstration, not the destination. The meta-learning framework applies broadly: identify a structural decision that CV handles poorly at small n, generate a simulation corpus spanning the decision's input space, pre-train a gate on interpretable meta-features, and deploy zero-shot. Any setting where cross-validation for model selection is unreliable at realistic sample sizes is a candidate.
+The stratified RMST example is only a demonstration. The meta-learning framework can potentially apply broadly: identify a structural decision that CV handles poorly at small n, generate a simulation corpus spanning the decision's input space, pre-train a gate on interpretable meta-features, and deploy zero-shot. Any setting where cross-validation for model selection is unreliable at realistic sample sizes is a candidate.
 
 ### 1.5 Contributions
 
@@ -37,7 +37,7 @@ The stratified RMST example is a demonstration, not the destination. The meta-le
 
 2. **A worked example via method selection for subgroup identification**: We demonstrate the framework on the concrete problem of selecting among six candidate methods (K = 1–5 stratified RMST boosting and Virtual Twins), showing that the gate outperforms cross-validation at small n.
 
-3. **A landmarking feature library for survival data**: Twenty-six interpretable features covering prognostic signal, interaction structure, treatment-effect profile, and data quality.
+3. **A landmarking feature library for survival data**: Thirty six interpretable features covering prognostic signal, interaction structure, treatment-effect profile, and data quality.
 
 4. **Empirical evidence for the small-n regime**: The gate beats CV in 28.8% of head-to-head comparisons versus 19.9% for CV (51.4% ties), with consistent advantages across n = 200–1000.
 
