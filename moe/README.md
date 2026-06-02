@@ -17,7 +17,7 @@ Key documents:
 Rscript moe/extract_gate_data.R
 
 # 2. Train gate + evaluate vs CV (10 parallel cores)
-python3 moe/run_parallel_gate.py
+py moe/run_parallel_gate.py
 
 # 3. Generate visualizations
 Rscript moe/gate_importance_viz.R

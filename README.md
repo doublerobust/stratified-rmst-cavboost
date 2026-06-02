@@ -67,7 +67,7 @@ Rscript moe/extract_gate_data.R
 Rscript moe/evaluate_gate.R
 
 # Parallel (10 cores):
-python3 moe/run_parallel_gate.py
+py moe/run_parallel_gate.py
 ```
 
 ### 3. Generate visualizations
