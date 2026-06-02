@@ -4,7 +4,7 @@
 
 ### 1.1 The Failure of Cross-Validation at Small Sample Sizes
 
-Cross-validation is the workhorse of model selection. It estimates out-of-sample performance using within-sample data, and for large samples it works well. But in the small-sample regime that characterizes early-phase clinical trials, genomic studies, and many biomedical settings — where n = 200–500 — cross-validation has a fundamental limitation: the standard error of a cross-validated performance estimate is comparable to or larger than the true performance difference between competing methods.
+Cross-validation is the workhorse of model selection. It estimates out-of-sample performance using within-sample data, and for large samples it works well. But in the small-sample regime that characterizes early-phase clinical trials, genomic studies, and many biomedical settings — where n = 200–500 — cross-validation has a fundamental limitation: the standard error of a cross-validated performance estimate is comparable to or larger than the true performance difference between competing methods [Kohavi, 1995; Bengio & Grandvalet, 2004; Varma & Simon, 2006; Hastie et al., 2009, §7.10].
 
 This problem is not restricted to any particular modeling task. It affects hyperparameter tuning (how many trees? which shrinkage rate?), model class selection (boosting vs. random forest vs. neural net?), and structural decisions (should we stratify? what cutpoint?). In all these cases, the practitioner must make a choice based on data that is too sparse to inform it reliably. Cross-validation, applied to a single dataset, cannot see the forest for the trees: it has no access to information from other datasets, other trials, or other studies that faced similar structural decisions.
 
@@ -43,3 +43,13 @@ We are not proposing a new method for stratification, nor a new approach to subg
 ### 1.6 Organization
 
 Section 2 reviews related work on cross-validation in small samples, meta-learning for algorithm selection, and the connection to foundation model pre-training. Section 3 describes the meta-learning pipeline: simulation generation, landmarking features, and gate architecture. Section 4 presents results on the stratified RMST example, including the comparison with cross-validation. Section 5 discusses which features the gate learns and the broader applicability of the framework. Section 6 concludes.
+
+## References
+
+1. Kohavi, R. (1995). A study of cross-validation and bootstrap for accuracy estimation and model selection. *Proceedings of the 14th International Joint Conference on Artificial Intelligence* (IJCAI), 2, 1137–1143.
+
+2. Bengio, Y. & Grandvalet, Y. (2004). No unbiased estimator of the variance of K-fold cross-validation. *Journal of Machine Learning Research*, 5, 1089–1105.
+
+3. Varma, S. & Simon, R. (2006). Bias in error estimation when using cross-validation for model selection. *BMC Bioinformatics*, 7, 91. doi:10.1186/1471-2105-7-91
+
+4. Hastie, T., Tibshirani, R. & Friedman, J. (2009). *The Elements of Statistical Learning* (2nd ed.). Springer. doi:10.1007/978-0-387-84858-7
