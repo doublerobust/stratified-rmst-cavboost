@@ -1,91 +1,117 @@
 # Stratified RMST CAVBoost
 
-Stratified RMST value function boosting for subgroup identification in
-time-to-event outcomes.  Augments the original CAVBoost gradient by
-computing the value function within prognostic strata, blocking
-prognostic confounding and improving subgroup identification accuracy.
+Stratified RMST value function boosting for subgroup identification in time-to-event outcomes — with a **Mixture-of-Experts (MoE-K) meta-learning gate** that automatically selects the optimal number of strata.
 
-The prognostic score is estimated via **5-fold cross-fitted elastic net
-Cox** (`cv.glmnet`, `alpha=0.5`) using **all 52 covariates**.  No
-collapsing or variable subsetting — experience shows that using fewer
-covariates silently changes the score and produces misleading comparisons.
+## MoE-K Gate: When Cross-Validation Fails
 
-## Key Formula
+The standard approach to selecting the number of strata $K$ is within-trial cross-validation. But CV is noisy at small sample sizes and expensive at large ones. The **MoE-K gate** replaces CV with a random forest trained on 39 dataset-level meta-features that predicts the optimal $K$ directly.
 
-Value function:
+### Key Results (989 test configurations)
 
-$$V_{\text{strat}} = \sum_{k=1}^K W_k\, d_k^{(1)} \;-\; \sum_{k=1}^K (n_k - W_k)\, d_k^{(2)}$$
+| Method | Mean AUC | Exact match vs oracle |
+|--------|:--------:|:--------------------:|
+| Oracle (theoretical upper bound) | 0.7886 | — |
+| **Gate (ranger RF)** | **0.7494** | **46.0%** |
+| 5-fold CV | 0.7395 | 35.1% |
+| Fixed K=4 | 0.7260 | — |
+| VT alone | 0.7264 | — |
 
-Gradient (XGBoost minimizes):
+The gate beats CV at every sample size ($n=200$–$1000$), with a mean AUC advantage of +0.01 (paired t-test $p = 6.4 \times 10^{-5}$). Full results in `moe/results/draft-summary.md`.
 
-$$g_j = -p_j(1-p_j)\Big[d_k^{(1)} + d_k^{(2)} + W_k\frac{\partial d_k^{(1)}}{\partial p_j} - (n_k-W_k)\frac{\partial d_k^{(2)}}{\partial p_j}\Big]$$
+### Feature Domains
+
+The gate uses 39 features across 8 domains: prognostic signal, treatment-effect heterogeneity, interaction structure, data maturity, sample regime, within-arm C-index, correlation structure, and bootstrap uncertainty. The [global importance plot](https://github.com/doublerobust/stratified-rmst-cavboost/blob/moe-integration/moe/results/gate_global_importance.pdf) shows C-index and bootstrap CI width are the strongest drivers.
 
 ## Repository Structure
 
 ```
-├── R/
-│   ├── stratified_cavboost.R      # Main gradient + crossfit implementation
-│   ├── rmst_cavboost_clean.R      # Original CAVBoost (baseline comparator)
-│   └── test_stratified_gradient.R # Gradient verification
-├── methodology/
-│   ├── stratified-rmst-boosting.tex  # Manuscript source
-│   └── stratified-rmst-boosting.pdf  # Rendered manuscript
-├── specs/
-│   └── foundation-moe-subgroup.md    # Future work: Foundation MoE spec
-├── run_main_comparison_50.R       # In-process 50-rep runner (Orig vs Strat vs VT)
-├── run_clean_50.R                 # Clean sequential runner (CSV output, gc() between reps)
-├── run_one_rep_v2.R               # Single-rep runner (fresh R process)
-├── run_sequential.R               # Subprocess sequential runner (calls v2)
-├── DEPENDENCIES.md                # Onboarding & installation guide
+├── R/                           # CAVBoost estimators
+│   ├── stratified_cavboost.R    # Main gradient + crossfit
+│   ├── rmst_cavboost_clean.R    # Original CAVBoost (comparator)
+│   └── test_stratified_gradient.R
+├── moe/                         # MoE-K gate pipeline
+│   ├── gate_features.R           # 39 meta-feature extractors
+│   ├── evaluate_gate.R           # Gate training + CV comparison
+│   ├── gate_importance_viz.R     # Feature importance + activation heatmaps
+│   ├── scenario_generator.R      # Parametric dataset sampler
+│   ├── extract_gate_data.R       # Aggregate RDS → training CSV
+│   ├── run_parallel_gate.py      # 10-core parallel launcher
+│   ├── run_parallel_simulation.py
+│   ├── run_on_omen.sh            # Omen launcher (legacy)
+│   ├── run_on_omen_docker.sh     # Omen launcher (Docker)
+│   ├── Dockerfile                # Reproducible R 4.6.0 environment
+│   ├── build.sh                  # Docker build + push
+│   └── results/
+│       ├── gate_training_data.csv        # Training data (5000 configs)
+│       ├── gate_evaluation.csv           # Test results (989 splits)
+│       ├── gate_summary.pdf              # AUC + match rate tables
+│       ├── gate_vs_cv_histograms.png     # Distribution of AUC differences
+│       ├── gate_global_importance.pdf    # Feature importance by domain
+│       ├── gate_activation_heatmap.pdf   # Per-dataset activation map
+│       ├── gate_brain_slice.pdf          # Single-dataset fMRI-style view
+│       └── draft-summary.md              # Methods + results narrative
+├── code/                        # Older analysis scripts
 └── README.md
 ```
 
-## Running the Simulation
+## Running the Gate Pipeline
 
-### Single rep (testing):
+### 1. Data extraction (from simulation RDS files)
 ```bash
-Rscript run_one_rep_v2.R <scenario 1-6> <rep 1-50> <output_path>
+Rscript moe/extract_gate_data.R
 ```
 
-### Full 50-rep × 6-scenario (sequential, about 3h):
+### 2. Train gate + run CV comparison
 ```bash
-Rscript run_clean_50.R > clean.log 2>&1 &
+# Sequential:
+Rscript moe/evaluate_gate.R
+
+# Parallel (10 cores):
+python3 moe/run_parallel_gate.py
 ```
 
-### Full run via subprocess:
+### 3. Generate visualizations
 ```bash
-Rscript run_sequential.R
+Rscript moe/gate_importance_viz.R
 ```
 
-### Parallel (on a multi-core machine):
+### Running on Omen (Windows) — Docker
+
 ```bash
-parallel -j 8 Rscript run_one_rep_v2.R {1} {2} results/sc{1}_rep{2}.rds ::: \
-  1 2 3 4 5 6 ::: $(seq 1 50)
+# One-time build
+docker build -t moe-k-sim -f moe/Dockerfile .
+
+# Run evaluation
+docker run --rm -v "$PWD/moe/results:/app/moe/results" --cpus 10 moe-k-sim \
+    Rscript moe/evaluate_gate.R 0 10
 ```
 
-### In-process (memory-intensive, faster):
-```bash
-Rscript run_main_comparison_50.R
-```
-
-## Key Parameter Agreements
-
-| Parameter | Value |
-|-----------|-------|
-| Prognostic strata | 5-fold cross-fitted `cv.glmnet(family="cox", alpha=0.5)`, all 52 covariates |
-| Original CAVBoost | `eta=0.05, max_depth=3, nrounds=50` |
-| Stratified CAVBoost | `eta=0.1, max_depth=2, nrounds=50` |
-| Virtual Twin | `ranger(num.trees=200, min.node.size=10)`, per-arm RF, RMST via trapezoidal integration on τ=30 |
-| Zhang scenarios | `n_train=500, n_test=2000, τ=30, ρ=1/3`, Setting 2 prognostic strength |
+See `moe/run_on_omen_docker.sh` for the full launcher.
 
 ## Dependencies
 
-- R 4.2+ with: xgboost, glmnet, ranger, survival, mvtnorm, pROC
-- See `DEPENDENCIES.md` for full installation instructions.
+- R 4.2+ with: ranger, glmnet, survival, xgboost, mvtnorm, data.table, ggplot2, gridExtra, RColorBrewer, viridisLite
+- Python 3 with: pandas, numpy (for parallel launchers)
+- Docker (optional, for Windows/Omen runs)
 
-## Reference
+## Key Algorithm Parameters
+
+| Parameter | Value |
+|-----------|-------|
+| Gate model | Ranger RF, 500 trees, impurity importance |
+| Gate features | 39 meta-features from 8 domains |
+| CV comparator | Real 5-fold with adaptive collapse (5→3→2) |
+| Candidate K | 1, 2, 3, 4, 5, VT (Virtual Twin) |
+| Base estimator | RMST CAVBoost (XGBoost, eta=0.05, max_depth=3) |
+| Simulation reps | 5000 configs × 10 reps = 50,000 datasets |
+| Sample sizes | n = 200, 300, 500, 1000 |
+| Scenario families | s_shaped, bump, linear, radial, enclave, cross, additive, random |
+
+## MoE-K Reference
+
+For the underlying stratified RMST estimator and original CAVBoost:
 
 Zhang, P., Liu, P., Chen, X., Ma, J., & Shentu, Y. (2020).
 *A nonparametric method for value function guided subgroup identification
 via gradient tree boosting for censored survival data.*
-Statistics in Medicine, 39(28), 4133--4146. PMID: 32786155.
+Statistics in Medicine, 39(28), 4133–4146. PMID: 32786155.
