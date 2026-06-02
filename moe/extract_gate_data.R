@@ -48,7 +48,7 @@ CONFIG_FEATURES <- c("n_predictive", "n_prognostic", "te_scale", "overlap", "b0"
 NEW_FEATURES <- c("c_index_trt", "c_index_ctrl", "c_index_ratio",
   "te_int_max_z", "te_int_mean_z", "te_int_prop_sig",
   "corr_mean", "corr_max", "corr_prop_high",
-  "prop_interact_sig", "trt_main_p")
+  "prop_interact_sig", "trt_main_p.trt01p")
 
 # ── Extract one file ────────────────────────────────────
 extract_one <- function(f) {
