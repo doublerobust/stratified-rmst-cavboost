@@ -19,9 +19,10 @@ import glob
 REPO = subprocess.check_output(
     ["git", "rev-parse", "--show-toplevel"], text=True
 ).strip()
-MOE = os.path.join(REPO, "moe")
-RESULTS = os.path.join(MOE, "results")
-EXTRACT_SCRIPT = os.path.join(MOE, "extract_gate_data.R")
+REPO = REPO.replace("\\", "/")
+MOE = os.path.join(REPO, "moe").replace("\\", "/")
+RESULTS = os.path.join(MOE, "results").replace("\\", "/")
+EXTRACT_SCRIPT = os.path.join(MOE, "extract_gate_data.R").replace("\\", "/")
 DEFAULT_CORES = 10
 
 
@@ -59,12 +60,9 @@ def run_chunk(chunk_idx: int, chunk_file: str, log_dir: str) -> subprocess.Popen
     log_file = os.path.join(log_dir, f"extract_chunk_{chunk_idx}.log")
     log_fh = open(log_file, "w")
     
-    # R script reads chunk file, processes files, writes chunk_N.csv
-    r_script = f'chunk_file <- commandArgs(TRUE)[1]; chunk_id <- as.integer(commandArgs(TRUE)[2]); '
-    r_script += f'files <- readLines(chunk_file); '
-    r_script += f'source("{EXTRACT_SCRIPT}"); '
-    r_script += f'process_chunk(files, chunk_id)'
-    
+    # Source the extract script directly — it auto-detects chunk mode from commandArgs
+    r_script = f'source("{EXTRACT_SCRIPT}")'
+
     proc = subprocess.Popen(
         ["Rscript", "-e", r_script, chunk_file, str(chunk_idx)],
         stdout=log_fh,
