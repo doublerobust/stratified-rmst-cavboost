@@ -13,7 +13,7 @@ cat(sprintf("Reading %d RDS files...\n", length(files)))
 
 # Known feature names (fixed set, not dynamic)
 FEATURES <- c("c_index","score_skew","score_kurt","score_var","score_q90_q10",
-  "delta_c_index","prop_interact_sig","te_bin_var","te_slope","te_quadratic_p",
+  "delta_c_index","te_bin_var","te_slope","te_quadratic_p",
   "te_max_diff","te_bin_event_rate_range","censoring_rate","event_rate",
   "event_count_trt","event_count_ctrl","median_followup","mean_followup","n","p",
   "e_per_p","bootstrap_ci_sd","bootstrap_ci_mean","orig_pred_var","orig_pred_mean","orig_ambiguity")
@@ -28,7 +28,8 @@ CONFIG_FEATURES <- c("n_predictive", "n_prognostic", "te_scale", "overlap", "b0"
 # New features computed from raw training data
 NEW_FEATURES <- c("c_index_trt", "c_index_ctrl", "c_index_ratio",
   "te_int_max_z", "te_int_mean_z", "te_int_prop_sig",
-  "corr_mean", "corr_max", "corr_prop_high")
+  "corr_mean", "corr_max", "corr_prop_high",
+  "prop_interact_sig", "trt_main_p")
 
 rows <- list()
 for (f in files) {
@@ -63,10 +64,11 @@ for (f in files) {
       new_feats <- tryCatch(
         c(
           .extract_within_arm_features(train_raw),
+          .extract_interaction_features(train_raw),
           .extract_te_interaction_features(train_raw),
           .extract_correlation_features(train_raw)
         ),
-        error = function(e) structure(rep(NA, 9), names = NEW_FEATURES)
+        error = function(e) structure(rep(NA, length(NEW_FEATURES)), names = NEW_FEATURES)
       )
       for (nm in names(new_feats)) row[[nm]] <- new_feats[[nm]]
     }
