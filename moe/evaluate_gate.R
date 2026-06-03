@@ -256,6 +256,9 @@ for (i in seq_along(test_files)) {
   cv_methods <- c(cv_aucs, cv_vt_auc)
   cv_method_opt <- if (length(cv_methods) > 0 && any(!is.na(cv_methods))) which.max(cv_methods) else NA_integer_
   gate_K_val <- gate_K[i]
+  # Skip if oracle can't be determined (all CV methods failed)
+  if (is.na(oracle_opt)) next
+  if (is.na(gate_K_val)) next
 
   results <- rbind(results, data.frame(
     family = cfg$family, n_train = cfg$n_train,
