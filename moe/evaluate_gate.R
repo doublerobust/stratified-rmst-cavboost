@@ -1,17 +1,11 @@
 #!/usr/bin/env Rscript
-# MoE-K Gate Evaluation: pre-trained gate vs real 5-fold CV
-# Designed for the Omen (fast, sequential, Windows-compatible)
+# Phase 2: Gate evaluation — real 5-fold CV on test reps
+# Loads pre-trained gate + test data from Phase 1 (train_gate.R).
 #
-# Usage:
-#   Rscript moe/evaluate_gate.R               # sequential
-#   Rscript moe/evaluate_gate.R 0 10           # chunk 0 of 10 (parallel)
-#   python3 moe/run_parallel_gate.py           # auto: 10 cores
+# Usage (chunk mode, called by run_parallel_gate.py):
+#   Rscript moe/evaluate_gate.R <chunk_idx> <n_chunks>
 #
-# This script:
-# 1. Reads gate training data (features + oracle optimal K)
-# 2. Trains ranger RF gate on 80% of data
-# 3. For each test rep, runs real 5-fold CV over K=1..5
-# 4. Compares: gate AUC vs CV AUC vs fixed K=4
+# Prerequisite: run moe/train_gate.R first
 
 library(glmnet)
 library(ranger)
@@ -36,92 +30,37 @@ auc_ <- function(p, l) {
 
 # ---- Parse parallel chunk args ----
 args <- commandArgs(trailingOnly = TRUE)
-chunk_idx <- 0L
-n_chunks <- 1L
-if (length(args) >= 2) {
-  chunk_idx <- as.integer(args[1])
-  n_chunks <- as.integer(args[2])
-  cat(sprintf("Parallel mode: chunk %d of %d\n", chunk_idx + 1L, n_chunks))
+if (length(args) < 2) {
+  cat("Usage: Rscript moe/evaluate_gate.R <chunk_idx> <n_chunks>\n")
+  cat("       First run: Rscript moe/train_gate.R\n")
+  quit(status = 1)
 }
+chunk_idx <- as.integer(args[1])
+n_chunks <- as.integer(args[2])
+cat(sprintf("Parallel mode: chunk %d of %d\n", chunk_idx + 1L, n_chunks))
 
-# ---- Load gate training data ----
-cat("Loading gate training data...\n")
-d <- fread("moe/results/gate_training_data.csv")
-
-exclude_cols <- c("seed","family","n_train","optimal_K","optimal_method","oracle_rate",
-  "auc_K1","auc_K2","auc_K3","auc_K4","auc_K5","auc_VT",
-  "cfg_n_predictive","cfg_n_prognostic","cfg_te_scale","cfg_b0",
-  "cfg_prognostic_form","cfg_te_start","cfg_te_peak","cfg_te_decay",
-  grep("^K[1-5]_", names(d), value = TRUE))
-# Also exclude any non-numeric columns that slipped through
-feat_cols <- setdiff(names(d), exclude_cols)
-is_num <- sapply(d[, ..feat_cols], is.numeric)
-feat_cols <- feat_cols[is_num]
-cat(sprintf("  %d rows, %d features\n", nrow(d), length(feat_cols)))
-
-X <- as.matrix(d[, ..feat_cols])
-for (j in seq_len(ncol(X))) X[is.na(X[,j]), j] <- mean(X[,j], na.rm=TRUE)
-X[!is.finite(X)] <- 0
-y <- d$optimal_method
-
-# ---- Train/test split ----
-# Split at CONFIG level (not row level) to prevent leakage from
-# per-rep data where multiple reps of the same config share a label
-set.seed(20260530)
-if (length(unique(paste0(d$family, d$n_train))) < nrow(d)) {
-  # Per-rep data: group rows by config before splitting
-  config_id <- rleidv(d[, c("family", "n_train")])
-  unique_configs <- unique(config_id)
-  n_configs <- length(unique_configs)
-  train_configs <- sample(unique_configs, round(0.8 * n_configs))
-  idx <- which(config_id %in% train_configs)
-} else {
-  # One row per config: simple row-level split is fine
-  idx <- sample(nrow(X), round(0.8 * nrow(X)))
-}
-X_tr <- X[idx,]; y_tr <- y[idx]
-X_te <- X[-idx,]; y_te <- y[-idx]
-cat(sprintf("  Train: %d, Test: %d\n", length(y_tr), length(y_te)))
-
-# ---- Train Random Forest gate (or load pre-trained) ----
-model_path <- "moe/results/rds/gate_model.rds"
-dir.create("moe/results/rds", showWarnings = FALSE, recursive = TRUE)
-if (file.exists(model_path)) {
-  cat("Loading pre-trained gate model...\n")
-  gate <- readRDS(model_path)
-} else {
-  cat("Training gate (ranger random forest)...\n")
-  gate <- ranger(
-    x = X_tr, y = factor(y_tr),
-    num.trees = 500,
-    mtry = floor(sqrt(ncol(X_tr))),
-    importance = "impurity",
-    seed = 20260530,
-    probability = TRUE
-  )
-  saveRDS(gate, model_path)
-  cat("Saved gate model to", model_path, "\n")
-}
+# ---- Load pre-trained gate and test data ----
+cat("Loading pre-trained gate model + test data...\n")
+gate <- readRDS("moe/results/rds/gate_model.rds")
+td <- readRDS("moe/results/rds/gate_test_data.rds")
+X_te <- td$X_te
+d_test <- td$d_test
+cat(sprintf("  Loaded gate, %d test rows\n", nrow(d_test)))
 
 # Gate predictions on test set
 probs <- predict(gate, X_te)$predictions
 gate_K <- max.col(probs, ties.method = "first")
 
-# ---- Real 5-fold CV on test set ----
-cat(sprintf("Running real 5-fold CV on %d test reps...\n", length(y_te)))
-cat("(This will take a while)\n\n")
-
+# ---- Build test file list ----
 files_all <- list.files("moe/results", "rep_.*\\.rds$", full.names = TRUE)
 if (length(files_all) == 0) {
   cat("ERROR: No RDS files found in moe/results/\n")
   quit(status = 1)
 }
 
-d_test <- d[-idx, ]
 test_files <- file.path("moe/results",
   paste0("rep_", d_test$family, "_", d_test$seed, ".rds"))
 test_files <- test_files[file.exists(test_files)]
-
 cat(sprintf("  Test files: %d\n", length(test_files)))
 
 # ---- Parallel chunking ----
@@ -138,9 +77,13 @@ if (n_chunks > 1L) {
 }
 
 if (length(test_files) == 0) {
-  cat("ERROR: gate_training_data.csv has no 'seed' column — re-run extract_gate_data.R\n")
+  cat("ERROR: no test files in this chunk — check moe/results/rds/gate_test_data.rds\n")
   quit(status = 1)
 }
+
+# ---- Real 5-fold CV ----
+cat(sprintf("Running real 5-fold CV on %d test reps...\n", length(test_files)))
+cat("(This will take a while)\n\n")
 
 results <- data.frame()
 for (i in seq_along(test_files)) {
@@ -164,7 +107,6 @@ for (i in seq_along(test_files)) {
   zcols <- .cov(train)
   n_tr <- nrow(train)
 
-  # 5-fold CV
   # Adaptive CV: try 5-fold -> 3-fold -> 2-fold, up to 3 random splits each
   run_cv_k <- function(train, oracle, zcols, K, base_seed) {
     for (n_folds in c(5L, 3L, 2L)) {
@@ -215,7 +157,7 @@ for (i in seq_along(test_files)) {
   }
 
   cv_aucs <- vapply(1:5, function(K) run_cv_k(train, oracle, zcols, K, seed + 200), numeric(1))
-  
+
   # ---- CV for VT (ranger per arm, 5-fold) ----
   cv_vt_auc <- NA_real_
   zcols_vt <- setdiff(names(train), c("trt01p", "time", "status"))
@@ -254,11 +196,7 @@ for (i in seq_along(test_files)) {
     if (is.finite(fold_mean)) { cv_vt_auc <- fold_mean; break }
   }
 
-  # CV selects best among K1..K5 and VT
-  cv_methods <- c(cv_aucs, cv_vt_auc)
-  cv_method_opt <- if (length(cv_methods) > 0 && any(!is.na(cv_methods))) which.max(cv_methods) else NA_integer_
-
-  # Use pre-computed AUCs and oracle from CSV (no need to read from RDS)
+  # Use pre-computed AUCs and oracle from CSV (no RDS extraction)
   test_aucs <- as.numeric(d_test[i, c("auc_K1","auc_K2","auc_K3","auc_K4","auc_K5","auc_VT")])
   oracle_opt <- d_test$optimal_method[i]
   cv_methods <- c(cv_aucs, cv_vt_auc)
@@ -282,8 +220,8 @@ for (i in seq_along(test_files)) {
 
   if (i %% 20 == 0) cat(sprintf("  %d/%d test reps done\n", i, length(test_files)))
   if (i %% 50 == 0) {
-    dir.create("rds", showWarnings = FALSE)
-    saveRDS(results, "rds/gate_intermediate_results.rds")
+    dir.create("moe/results/rds", showWarnings = FALSE)
+    saveRDS(results, "moe/results/rds/gate_intermediate_chunk.rds")
   }
 }
 
@@ -311,7 +249,6 @@ cat(sprintf("Gate vs VT: Gate beats VT in %.1f%% of reps\n",
     100 * mean(results$gate_auc > results$vt_auc, na.rm = TRUE)))
 cat(sprintf("VT vs CV:  VT beats CV in %.1f%% of reps\n",
     100 * mean(results$vt_auc > results$cv_auc, na.rm = TRUE)))
-cat(sprintf("CV exact match: %.1f%%\n", 100 * mean(results$cv_method == results$oracle_method, na.rm = TRUE)))
 
 cat("\n=== Method: VT-wins scenario ===\n")
 vt_wins <- results[which(results$vt_auc > apply(results[,c("k4_auc","cv_auc","gate_auc")], 1, max, na.rm=TRUE)),]
@@ -339,10 +276,6 @@ for (nn in c(200, 300, 500, 1000)) {
       mean(s$oracle_auc - s$vt_auc, na.rm = TRUE)))
 }
 
-out_file <- if (n_chunks > 1L) {
-  sprintf("moe/results/gate_evaluation_chunk_%d.csv", chunk_idx)
-} else {
-  "moe/results/gate_evaluation.csv"
-}
+out_file <- sprintf("moe/results/gate_evaluation_chunk_%d.csv", chunk_idx)
 write.csv(results, out_file, row.names = FALSE)
 cat(sprintf("\nResults saved to: %s\n", out_file))
