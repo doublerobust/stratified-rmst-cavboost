@@ -60,7 +60,10 @@ if (length(files_all) == 0) {
 
 test_files <- file.path("moe/results",
   paste0("rep_", d_test$family, "_", d_test$seed, ".rds"))
-test_files <- test_files[file.exists(test_files)]
+keep <- file.exists(test_files)
+test_files <- test_files[keep]
+d_test <- d_test[keep, , drop = FALSE]
+gate_K <- gate_K[keep]
 cat(sprintf("  Test files: %d\n", length(test_files)))
 
 # ---- Parallel chunking ----
