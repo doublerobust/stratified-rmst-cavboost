@@ -83,16 +83,25 @@ X_tr <- X[idx,]; y_tr <- y[idx]
 X_te <- X[-idx,]; y_te <- y[-idx]
 cat(sprintf("  Train: %d, Test: %d\n", length(y_tr), length(y_te)))
 
-# ---- Train Random Forest gate ----
-cat("Training gate (ranger random forest)...\n")
-gate <- ranger(
-  x = X_tr, y = factor(y_tr),
-  num.trees = 500,
-  mtry = floor(sqrt(ncol(X_tr))),
-  importance = "impurity",
-  seed = 20260530,
-  probability = TRUE
-)
+# ---- Train Random Forest gate (or load pre-trained) ----
+model_path <- "moe/results/rds/gate_model.rds"
+dir.create("moe/results/rds", showWarnings = FALSE, recursive = TRUE)
+if (file.exists(model_path)) {
+  cat("Loading pre-trained gate model...\n")
+  gate <- readRDS(model_path)
+} else {
+  cat("Training gate (ranger random forest)...\n")
+  gate <- ranger(
+    x = X_tr, y = factor(y_tr),
+    num.trees = 500,
+    mtry = floor(sqrt(ncol(X_tr))),
+    importance = "impurity",
+    seed = 20260530,
+    probability = TRUE
+  )
+  saveRDS(gate, model_path)
+  cat("Saved gate model to", model_path, "\n")
+}
 
 # Gate predictions on test set
 probs <- predict(gate, X_te)$predictions
@@ -249,16 +258,15 @@ for (i in seq_along(test_files)) {
   cv_methods <- c(cv_aucs, cv_vt_auc)
   cv_method_opt <- if (length(cv_methods) > 0 && any(!is.na(cv_methods))) which.max(cv_methods) else NA_integer_
 
-  # Get the actual test AUCs from the saved result
-  test_aucs <- r$aucs
-  oracle_opt <- if (!is.null(r$oracle_optimal_method)) r$oracle_optimal_method
-                else if (!is.null(r$oracle_optimal_K)) r$oracle_optimal_K else NA_integer_
+  # Use pre-computed AUCs and oracle from CSV (no need to read from RDS)
+  test_aucs <- as.numeric(d_test[i, c("auc_K1","auc_K2","auc_K3","auc_K4","auc_K5","auc_VT")])
+  oracle_opt <- d_test$optimal_method[i]
   cv_methods <- c(cv_aucs, cv_vt_auc)
   cv_method_opt <- if (length(cv_methods) > 0 && any(!is.na(cv_methods))) which.max(cv_methods) else NA_integer_
   gate_K_val <- gate_K[i]
-  # Skip if oracle can't be determined (all CV methods failed)
-  if (is.na(oracle_opt)) next
-  if (is.na(gate_K_val)) next
+  # Skip if oracle or gate can't be determined
+  if (!isTRUE(length(oracle_opt) == 1 && is.finite(oracle_opt))) next
+  if (!isTRUE(length(gate_K_val) == 1 && is.finite(gate_K_val))) next
 
   results <- rbind(results, data.frame(
     family = cfg$family, n_train = cfg$n_train,
